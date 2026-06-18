@@ -94,12 +94,12 @@ model Answer {
 
 ## Phase 1 — 공통 유틸 (도메인 독립, 테스트 우선)
 
-- [ ] `common/date/service-date.util.ts`: KST 자정 기준 serviceDate 계산 (P7) — **전 도메인 공용 단일 함수**
-- [ ] `service-date.util.spec.ts`: 자정 경계·타임존 변환 단위 테스트
-- [ ] `common/moderation/profanity.service.ts`: 금칙어 목록 기반 검사 (P6), `ProfanityModule` export
-- [ ] `profanity.service.spec.ts`: 차단/통과 케이스
-- [ ] `common/identity/`: 쿠키 기반 익명 ID 발급/검증 (P2). httpOnly·secure·서명 쿠키. `@AnonId()` 데코레이터 또는 가드로 anonId 주입. 진입/활동 시 `User` upsert로 `lastSeen` 갱신
-- [ ] identity 단위 테스트 (신규 발급 / 기존 쿠키 재사용 / lastSeen 갱신)
+- [x] `common/date/service-date.util.ts`: KST 자정 기준 serviceDate 계산 (P7) — **전 도메인 공용 단일 함수**
+- [x] `service-date.util.spec.ts`: 자정 경계·타임존 변환 단위 테스트
+- [x] `common/moderation/profanity.service.ts`: 금칙어 목록 기반 검사 (P6), `ProfanityModule` export
+- [x] `profanity.service.spec.ts`: 차단/통과 케이스
+- [x] `common/identity/`: 쿠키 기반 익명 ID 발급/검증 (P2). httpOnly·secure·서명 쿠키. `@AnonId()` 데코레이터 또는 가드로 anonId 주입. 진입/활동 시 `User` upsert로 `lastSeen` 갱신 <!-- lastSeen upsert는 Phase 2 User 모델 의존으로 보류, AnonIdGuard에 TODO(Phase 2) (ISSUES.md 참조) -->
+- [x] identity 단위 테스트 (신규 발급 / 기존 쿠키 재사용 / lastSeen 갱신) <!-- 신규 발급/기존 재사용 커버, lastSeen 테스트는 Phase 2 이월 -->
 
 ## Phase 2 — Questions 모듈 (P3)
 
