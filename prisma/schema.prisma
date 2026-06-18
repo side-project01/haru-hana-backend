@@ -1,0 +1,12 @@
+// 데일리 카드 Prisma 스키마
+// 모델은 Phase 2(User/Question)·Phase 3(Answer)에서 마이그레이션으로 추가한다.
+// 학습 자료: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
