@@ -103,11 +103,11 @@ model Answer {
 
 ## Phase 2 — Questions 모듈 (P3)
 
-- [ ] `prisma/schema.prisma`에 `User`·`Question` 모델 추가 → `migrate dev --name add-user-question`
-- [ ] `prisma/seed.ts`: 질문 20개(body + displayDate KST 매핑) + 예시 타인 답변 N건(전용 anonId) 주입, `package.json`에 seed 설정
-- [ ] `questions.service.ts`: `findTodayQuestion()` — serviceDate util로 오늘 `displayDate` 매칭 조회. 미매칭이면 `null` 반환
-- [ ] `questions.controller.ts`: `GET /questions/today` → `{ question|null, answeredToday, serviceDate }`, 응답 DTO 분리, Swagger 데코레이터
-- [ ] `questions.service.spec.ts`: 오늘 질문 조회 / 미존재(null) 처리
+- [x] `prisma/schema.prisma`에 `User`·`Question` 모델 추가 → `migrate dev --name add-user-question` <!-- 로컬 DB 미기동으로 migrate 미실행, generate로 Client만 갱신. DB 기동 후 migrate 1회 필요 (ISSUES.md) -->
+- [x] `prisma/seed.ts`: 질문 20개(body + displayDate KST 매핑) + 예시 타인 답변 N건(전용 anonId) 주입, `package.json`에 seed 설정 <!-- 질문 20개·seed 설정 완료. 예시 타인 답변은 Answer 모델(Phase 3) 의존으로 이월 (ISSUES.md) -->
+- [x] `questions.service.ts`: `findTodayQuestion()` — serviceDate util로 오늘 `displayDate` 매칭 조회. 미매칭이면 `null` 반환
+- [x] `questions.controller.ts`: `GET /questions/today` → `{ question|null, answeredToday, serviceDate }`, 응답 DTO 분리, Swagger 데코레이터 <!-- answeredToday는 Answer 모델(Phase 3) 의존으로 현재 false stub (ISSUES.md) -->
+- [x] `questions.service.spec.ts`: 오늘 질문 조회 / 미존재(null) 처리
 
 ## Phase 3 — Answers 모듈 (P1·P4·P5·P6)
 

@@ -1,5 +1,5 @@
 // 데일리 카드 Prisma 스키마
-// 모델은 Phase 2(User/Question)·Phase 3(Answer)에서 마이그레이션으로 추가한다.
+// Answer 모델은 Phase 3에서 마이그레이션으로 추가한다.
 // 학습 자료: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -9,4 +9,20 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// 익명 사용자 (리텐션 지표용, PRD 7장)
+model User {
+  anonId    String   @id // 쿠키 익명 식별자 (P2)
+  firstSeen DateTime @default(now()) // 최초 진입일
+  lastSeen  DateTime @updatedAt // 마지막 활동일 (D1/D7 산정 기반)
+}
+
+// 오늘의 질문 (P3: 1일 1질문)
+model Question {
+  id          Int      @id @default(autoincrement())
+  body        String
+  displayDate DateTime @unique // KST serviceDate(자정, UTC 저장) 매칭 키 (P3)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
 }

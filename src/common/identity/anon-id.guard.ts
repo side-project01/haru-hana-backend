@@ -1,7 +1,13 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import type { EnvConfig } from '../../config/env.validation';
+import { PrismaService } from '../prisma/prisma.service';
 import { AnonIdService } from './anon-id.service';
 import {
   ANON_ID_COOKIE,
@@ -21,12 +27,15 @@ import {
  */
 @Injectable()
 export class AnonIdGuard implements CanActivate {
+  private readonly logger = new Logger(AnonIdGuard.name);
+
   constructor(
     private readonly config: ConfigService<EnvConfig, true>,
     private readonly anonIdService: AnonIdService,
+    private readonly prisma: PrismaService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const httpCtx = context.switchToHttp();
     const request = httpCtx.getRequest<RequestWithAnonId>();
     const response = httpCtx.getResponse<Response>();
@@ -51,10 +60,24 @@ export class AnonIdGuard implements CanActivate {
       request.anonId = anonId;
     }
 
-    // TODO(Phase 2): User 모델 추가 후, 여기서 anonId 기준 lastSeen upsert로
-    // 리텐션 지표(D1/D7)를 갱신한다. 현재는 User 모델/Prisma 델리게이트가 없어 보류.
-    // (ISSUES.md: [Phase 1] 예측 불가 — identity lastSeen upsert가 Phase 2 User 모델에 의존)
+    // 진입/활동 시 User upsert로 lastSeen 갱신 — 리텐션 지표(D1/D7) 기반 (PRD 7장).
+    // 지표 갱신은 비핵심이므로 실패해도 요청을 막지 않는다(식별자 보장이 가드의 목적).
+    await this.touchUser(request.anonId);
 
     return true;
+  }
+
+  /** anonId 사용자의 lastSeen을 갱신한다(없으면 생성). 실패는 삼켜 요청 흐름을 보장한다. */
+  private async touchUser(anonId: string): Promise<void> {
+    try {
+      await this.prisma.user.upsert({
+        where: { anonId },
+        update: {}, // @updatedAt이 lastSeen을 자동 갱신
+        create: { anonId },
+      });
+    } catch {
+      // anonId 원문 등 민감정보는 로그에 남기지 않는다(CLAUDE.md 7장).
+      this.logger.warn('사용자 활동(lastSeen) 갱신 실패');
+    }
   }
 }
