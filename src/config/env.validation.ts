@@ -9,8 +9,11 @@ export const envSchema = z.object({
     .enum(['development', 'production', 'test'])
     .default('development'),
 
-  /** PostgreSQL 연결 문자열 */
+  /** PostgreSQL 런타임 연결 문자열(pooled). 서버리스에서 커넥션 폭발 방지용. */
   DATABASE_URL: z.url(),
+
+  /** 마이그레이션용 직접(non-pooled) 연결. Prisma migrate가 사용. */
+  DIRECT_URL: z.url(),
 
   /** HTTP 포트 */
   PORT: z.coerce.number().int().positive().default(3000),

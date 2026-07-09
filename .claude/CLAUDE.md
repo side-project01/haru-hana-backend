@@ -170,8 +170,34 @@ src/common/
 
 ---
 
+## 11. 배포 (서버리스 — Vercel + Neon)
+
+프로덕션은 **Vercel 서버리스 함수**로 배포하고, DB는 **Neon(pooled Postgres)**을 쓴다.
+
+**진입점 이원화**
+- **로컬 개발**: `src/main.ts` (`app.listen`) — `npm run start:dev`.
+- **서버리스 배포**: `api/index.ts` — 포트를 열지 않고 `app.init()`한 Express 인스턴스를 함수 핸들러로 노출한다.
+- 두 진입점의 미들웨어·파이프 설정(Helmet·cookie-parser·CORS·ValidationPipe)은 **항상 동일하게 유지**한다. 한쪽만 바꾸지 않는다. 단, **Swagger는 서버리스 진입점에서 제외**한다(콜드스타트 비용·문서 비공개).
+- 부팅한 앱은 모듈 전역 변수에 **캐시**해 웜 인스턴스에서 재부팅하지 않는다.
+
+**DB 커넥션 (서버리스 최대 함정)**
+- 배포용 `DATABASE_URL`은 반드시 **pooled 엔드포인트**(Neon `-pooler`)를 쓴다. 파라미터에 `pgbouncer=true&connection_limit=1`을 붙여 함수 인스턴스당 커넥션 1개로 제한 → 커넥션 폭발 방지.
+- `prisma/schema.prisma`의 `generator.binaryTargets`에 `rhel-openssl-3.0.x`(Vercel 런타임)를 포함한다. 로컬용 `native`와 함께.
+- **마이그레이션은 함수 안에서 자동 실행 금지.** 로컬/CI에서 `prisma migrate deploy`로 별도 수행한다.
+
+**설정 파일**
+- `vercel.json`: `buildCommand`에 `prisma generate` 포함(node_modules 캐시로 인한 stale 클라이언트 방지), 전 요청을 `/api`로 rewrite.
+- 환경변수(`DATABASE_URL`·`COOKIE_SECRET`·`CORS_ORIGINS`·`NODE_ENV`)는 Vercel 대시보드에 등록. `env.validation.ts`가 fail-fast라 누락 시 콜드스타트에서 즉시 실패한다.
+
+**날짜(P7) 주의**
+- Vercel 함수는 UTC로 실행된다. `service-date.util`은 로컬 타임존 게터를 쓰지 않고 UTC epoch + 고정 KST 오프셋으로 계산하므로 안전 — 이 불변식을 깨지 않는다(로컬 `getHours`/`getFullYear` 등 사용 금지, `getUTC*`·`Date.UTC`만).
+
+---
+
 ## 참고 링크
 - NestJS 공식 문서: https://docs.nestjs.com
 - NestJS 보안(Helmet/CORS/Throttler): https://docs.nestjs.com/security/helmet
 - Prisma + NestJS: https://docs.nestjs.com/recipes/prisma
 - class-validator: https://github.com/typestack/class-validator
+- Vercel Functions(Node): https://vercel.com/docs/functions
+- Neon + Prisma(서버리스 커넥션): https://neon.tech/docs/guides/prisma

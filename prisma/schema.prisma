@@ -4,11 +4,17 @@
 
 generator client {
   provider = "prisma-client-js"
+  // native: 로컬 개발용. rhel-openssl-3.0.x: Vercel 서버리스 런타임용 엔진.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // 런타임: pooled 연결(PgBouncer). 서버리스 커넥션 폭발 방지.
+  url = env("DATABASE_URL")
+  // 마이그레이션: 직접(non-pooled) 연결. PgBouncer는 migrate가 쓰는 세션 기능을 막는다.
+  // 로컬은 DATABASE_URL과 같은 값이어도 되고, Neon은 -pooler 없는 URL을 쓴다.
+  directUrl = env("DIRECT_URL")
 }
 
 // 익명 사용자 (리텐션 지표용, PRD 7장)
