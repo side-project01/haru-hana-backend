@@ -18,9 +18,7 @@ export class QuestionsController {
   @Get('today')
   @ApiOperation({ summary: '오늘의 질문 + 본인 답변 여부 + serviceDate 조회' })
   @ApiOkResponse({ type: TodayQuestionResponseDto })
-  async getToday(
-    @AnonId() anonId: string,
-  ): Promise<TodayQuestionResponseDto> {
+  async getToday(@AnonId() anonId: string): Promise<TodayQuestionResponseDto> {
     const { question, answeredToday, serviceDate } =
       await this.questionsService.getToday(anonId);
 

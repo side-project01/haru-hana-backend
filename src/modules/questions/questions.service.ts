@@ -35,7 +35,10 @@ export class QuestionsService {
    * @param anonId 익명 식별자 (P2). 당일 본인 답변 여부 판정에 사용(Phase 3).
    * @param now 기준 시각(기본값: 현재).
    */
-  async getToday(anonId: string, now: Date = new Date()): Promise<TodayQuestion> {
+  async getToday(
+    anonId: string,
+    now: Date = new Date(),
+  ): Promise<TodayQuestion> {
     const serviceDate = getServiceDate(now);
     const question = await this.findTodayQuestion(now);
     const answeredToday = await this.hasAnsweredToday(anonId, serviceDate);

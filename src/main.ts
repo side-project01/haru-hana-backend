@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
-import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import type { EnvConfig } from './config/env.validation';
 
@@ -14,10 +13,10 @@ async function bootstrap() {
   // 1) Helmet — 보안 헤더는 다른 미들웨어보다 먼저(CLAUDE.md 6장)
   app.use(helmet());
 
-  // 2) cookie-parser — 익명 식별자 서명 쿠키(P2)를 위해 시크릿 주입
-  app.use(cookieParser(config.get('COOKIE_SECRET', { infer: true })));
+  // 익명 식별자 쿠키(P2)의 서명/검증은 AnonIdService(HMAC)가 직접 처리하므로
+  // cookie-parser는 쓰지 않는다(진입점 무관 동작 보장, CLAUDE.md 11장).
 
-  // 3) CORS 화이트리스트 — 허용 오리진만, 쿠키 전송 위해 credentials 허용
+  // 2) CORS 화이트리스트 — 허용 오리진만, 쿠키 전송 위해 credentials 허용
   app.enableCors({
     origin: config.get('CORS_ORIGINS', { infer: true }),
     credentials: true,

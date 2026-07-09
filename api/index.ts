@@ -3,7 +3,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import helmet from 'helmet';
-import cookieParser from 'cookie-parser';
 import express, { type Express, type Request, type Response } from 'express';
 import { AppModule } from '../src/app.module';
 import type { EnvConfig } from '../src/config/env.validation';
@@ -28,8 +27,8 @@ async function bootstrap(): Promise<Express> {
   const config = app.get(ConfigService<EnvConfig, true>);
 
   // main.ts와 동일한 순서·설정(CLAUDE.md 6장). 단, Swagger는 서버리스에서 제외.
+  // 익명 식별자 쿠키(P2) 서명은 AnonIdService(HMAC)가 직접 처리 → cookie-parser 불필요.
   app.use(helmet());
-  app.use(cookieParser(config.get('COOKIE_SECRET', { infer: true })));
   app.enableCors({
     origin: config.get('CORS_ORIGINS', { infer: true }),
     credentials: true,

@@ -177,7 +177,8 @@ src/common/
 **진입점 이원화**
 - **로컬 개발**: `src/main.ts` (`app.listen`) — `npm run start:dev`.
 - **서버리스 배포**: `api/index.ts` — 포트를 열지 않고 `app.init()`한 Express 인스턴스를 함수 핸들러로 노출한다.
-- 두 진입점의 미들웨어·파이프 설정(Helmet·cookie-parser·CORS·ValidationPipe)은 **항상 동일하게 유지**한다. 한쪽만 바꾸지 않는다. 단, **Swagger는 서버리스 진입점에서 제외**한다(콜드스타트 비용·문서 비공개).
+- 두 진입점의 미들웨어·파이프 설정(Helmet·CORS·ValidationPipe)은 **항상 동일하게 유지**한다. 한쪽만 바꾸지 않는다. 단, **Swagger는 서버리스 진입점에서 제외**한다(콜드스타트 비용·문서 비공개).
+- **cookie-parser는 쓰지 않는다.** 익명 식별자 쿠키(P2)의 서명/검증은 `AnonIdService`가 COOKIE_SECRET 기반 HMAC-SHA256으로 직접 처리한다. cookie-parser의 `signed` 기능은 `req.secret`에 의존하는데, Vercel(`@vercel/node`) 런타임이 `req.cookies`를 미리 채워 cookie-parser가 조기 반환(`req.secret` 미설정)하면 서명 쿠키 발급이 깨진다. 직접 HMAC 서명은 진입점·런타임 무관하게 동작하므로 이 함정을 원천 제거한다.
 - 부팅한 앱은 모듈 전역 변수에 **캐시**해 웜 인스턴스에서 재부팅하지 않는다.
 
 **DB 커넥션 (서버리스 최대 함정)**

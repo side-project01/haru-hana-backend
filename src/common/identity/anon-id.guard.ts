@@ -12,14 +12,16 @@ import { AnonIdService } from './anon-id.service';
 import {
   ANON_ID_COOKIE,
   buildAnonIdCookieOptions,
+  readAnonIdCookie,
   RequestWithAnonId,
 } from './anon-id.constants';
 
 /**
  * 익명 식별자 가드 (P2).
  *
- * 요청의 서명 쿠키에서 anonId를 읽어 `request.anonId`에 주입한다.
- * 쿠키가 없거나 유효하지 않으면 새 anonId를 발급하고 응답에 서명 쿠키로 심는다.
+ * 요청 Cookie 헤더에서 서명된 anonId를 읽어 검증 후 `request.anonId`에 주입한다.
+ * 쿠키가 없거나 서명이 유효하지 않으면 새 anonId를 발급하고 응답에 서명 쿠키로 심는다.
+ * 서명/검증은 AnonIdService(HMAC)가 담당한다(cookie-parser 비의존).
  * 컨트롤러는 `@AnonId()` 데코레이터로 이 값을 받는다.
  *
  * 라우트에 `@UseGuards(AnonIdGuard)`로 적용한다. 이 가드는 인가(차단)가 아니라
@@ -40,11 +42,11 @@ export class AnonIdGuard implements CanActivate {
     const request = httpCtx.getRequest<RequestWithAnonId>();
     const response = httpCtx.getResponse<Response>();
 
-    const existing = request.signedCookies?.[ANON_ID_COOKIE] as
-      | string
-      | undefined;
+    // Cookie 헤더에서 직접 읽어 HMAC 서명을 검증한다(cookie-parser 비의존).
+    const rawCookie = readAnonIdCookie(request.headers?.cookie);
+    const existing = rawCookie ? this.anonIdService.verify(rawCookie) : null;
 
-    if (typeof existing === 'string' && existing.length > 0) {
+    if (existing) {
       // 기존 쿠키 재사용
       request.anonId = existing;
     } else {
@@ -54,7 +56,7 @@ export class AnonIdGuard implements CanActivate {
         this.config.get('NODE_ENV', { infer: true }) === 'production';
       response.cookie(
         ANON_ID_COOKIE,
-        anonId,
+        this.anonIdService.sign(anonId),
         buildAnonIdCookieOptions(isProduction),
       );
       request.anonId = anonId;
