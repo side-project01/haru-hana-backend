@@ -1,5 +1,4 @@
 // 데일리 카드 Prisma 스키마
-// Answer 모델은 Phase 3에서 마이그레이션으로 추가한다.
 // 학습 자료: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -31,4 +30,21 @@ model Question {
   displayDate DateTime @unique // KST serviceDate(자정, UTC 저장) 매칭 키 (P3)
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
+  answers     Answer[]
+}
+
+// 답변 (P1 하루 1회 · P4 배경 · P5 타인 답변)
+model Answer {
+  id          Int      @id @default(autoincrement())
+  anonId      String // 쿠키 익명 식별자 (P2)
+  questionId  Int
+  question    Question @relation(fields: [questionId], references: [id])
+  content     String // 답변 본문 (P6 금칙어 검사 후 저장)
+  bgType      String // 카드 배경 타입 (color/gradient/image) (P4)
+  bgValue     String // 카드 배경 값 (P4)
+  serviceDate DateTime // KST 자정 기준 서비스 날짜 (P7)
+  createdAt   DateTime @default(now())
+
+  @@unique([anonId, serviceDate]) // P1: 하루 1회 DB 레벨 강제
+  @@index([questionId]) // P5: 타인 답변 조회
 }

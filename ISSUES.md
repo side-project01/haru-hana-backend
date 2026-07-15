@@ -36,8 +36,15 @@
 - 분류: 예측 불가(인프라 미비) | 심각도: 중 | 상태: 확인 필요
 - 결정/제안: schema.prisma에 User·Question 모델을 추가하고 `npx prisma generate`로 Client 타입만 갱신해 빌드/타입을 통과시킴. **DB 기동 후 `npx prisma migrate dev --name add-user-question`을 반드시 1회 실행**해 마이그레이션 파일 생성 및 스키마 반영 필요(Phase 3 add-answer 이전).
 
+## [Phase 3] 인프라 미비 — 로컬 DB 인증 실패로 add-answer migrate 미실행
+- 상황: `npx prisma migrate dev --name add-answer` 실행 시 `P1000: Authentication failed`(서버는 도달, 자격증명 불일치). 로컬 PostgreSQL 자격증명이 현재 환경과 맞지 않음.
+- 영향/위험: `prisma/migrations/`에 add-user-question·add-answer 마이그레이션 파일이 아직 없고 실제 DB 스키마 미반영. 빌드/단위 테스트는 Prisma를 mock 하므로 영향 없음(37개 통과).
+- 분류: 예측 불가(인프라 미비) | 심각도: 중 | 상태: 확인 필요
+- 결정/제안: schema에 Answer 모델을 추가하고 `npx prisma generate`로 Client 타입만 갱신해 빌드/타입/테스트 통과. **DB 기동·자격증명 정합 후 `npx prisma migrate dev`(add-user-question → add-answer 순)를 실행**해 마이그레이션 파일 생성·스키마 반영, 이어서 `npx prisma db seed`로 질문 20개+예시 타인 답변 주입 필요. e2e(Phase 4)는 그 이후 가능.
+
 ## [Phase 2] 모호함 — answeredToday·시드 예시답변이 Answer 모델(Phase 3)에 의존
 - 상황: `GET /questions/today`의 `answeredToday`(P1)와 seed의 "예시 타인 답변 N건"(P5 초기 풀)은 모두 `Answer` 모델을 전제하나, Answer는 Phase 3 마이그레이션(`add-answer`)에서 추가된다. Phase 2 시점엔 Prisma Client에 `answer` 델리게이트가 없어 참조 시 컴파일 불가.
 - 영향/위험: Phase 2에서 그대로 구현하면 빌드 실패. 응답 스키마(answeredToday)·초기 답변 풀 완화는 Answer 존재가 전제.
-- 분류: 모호함 | 심각도: 중 | 상태: 확인 필요
+- 분류: 모호함 | 심각도: 중 | 상태: 해결됨
 - 결정: 응답 스키마 유지를 위해 `QuestionsService.hasAnsweredToday`를 `false` 반환 stub으로 두고 `TODO(Phase 3)` 주석 표기. seed는 질문 20개만 주입하고 예시 타인 답변은 Phase 3(Answer 추가 시)로 이월. Phase 3에서 `prisma.answer`로 두 지점을 모두 연결.
+- 해결(Phase 3): Answer 모델 추가 후 `hasAnsweredToday`를 `prisma.answer.findUnique({ where: { anonId_serviceDate } })`로 연결(answeredToday 실제 반영), questions 스펙에 answeredToday=true 케이스 추가. seed는 첫날 질문에 예시 타인 답변 3건(anonId 접두사 `seed-`, serviceDate=baseDate)을 upsert로 주입(idempotent).

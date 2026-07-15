@@ -1,5 +1,6 @@
 # 데일리 카드 로컬 개발용 PostgreSQL
-# .env의 DATABASE_URL(postgres:postgres@localhost:5432/daily_card)과 일치한다.
+# .env의 DATABASE_URL(postgres:postgres@localhost:5433/daily_card)과 일치한다.
+# 호스트 포트는 5433 — 5432는 다른 프로젝트 Postgres가 점유할 수 있어 충돌을 피한다.
 # 기동:  docker compose up -d
 # 중지:  docker compose down        (데이터 유지)
 # 초기화: docker compose down -v     (볼륨까지 삭제)
@@ -14,7 +15,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: daily_card
     ports:
-      - '5432:5432'
+      - '5433:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

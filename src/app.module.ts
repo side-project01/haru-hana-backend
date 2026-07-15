@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env.validation';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { QuestionsModule } from './modules/questions/questions.module';
+import { AnswersModule } from './modules/answers/answers.module';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { QuestionsModule } from './modules/questions/questions.module';
     }),
     PrismaModule,
     QuestionsModule,
-    // answers 모듈은 Phase 3에서 추가한다.
+    AnswersModule,
   ],
 })
 export class AppModule {}

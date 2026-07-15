@@ -47,15 +47,16 @@ export class QuestionsService {
   }
 
   /**
-   * 당일 본인 답변 존재 여부 (P1).
-   * TODO(Phase 3): Answer 모델 추가 후
-   * `prisma.answer.findUnique({ where: { anonId_serviceDate: { anonId, serviceDate } } })`로 구현한다.
-   * Answer 모델이 없는 현 시점에는 항상 false.
+   * 당일 본인 답변 존재 여부 (P1). 완료 모달 분기에 사용한다.
+   * 하루 1회 제약과 동일한 (anonId, serviceDate) 유니크 키로 조회한다.
    */
-  private hasAnsweredToday(
-    _anonId: string,
-    _serviceDate: Date,
+  private async hasAnsweredToday(
+    anonId: string,
+    serviceDate: Date,
   ): Promise<boolean> {
-    return Promise.resolve(false);
+    const existing = await this.prisma.answer.findUnique({
+      where: { anonId_serviceDate: { anonId, serviceDate } },
+    });
+    return existing !== null;
   }
 }

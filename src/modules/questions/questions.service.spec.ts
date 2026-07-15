@@ -5,11 +5,14 @@ import { getServiceDate } from '../../common/date/service-date.util';
 describe('QuestionsService (P3 — 1일 1질문)', () => {
   let service: QuestionsService;
   let findFirst: jest.Mock;
+  let answerFindUnique: jest.Mock;
 
   beforeEach(() => {
     findFirst = jest.fn();
+    answerFindUnique = jest.fn().mockResolvedValue(null); // 기본: 미답변
     service = new QuestionsService({
       question: { findFirst },
+      answer: { findUnique: answerFindUnique },
     } as unknown as PrismaService);
   });
 
@@ -49,8 +52,26 @@ describe('QuestionsService (P3 — 1일 1질문)', () => {
 
       expect(result.question).toBe(question);
       expect(result.serviceDate).toEqual(getServiceDate(now));
-      // Answer 모델은 Phase 3에서 추가되므로 현재 answeredToday는 항상 false
+      // 본인 당일 답변이 없으면 answeredToday=false (P1)
       expect(result.answeredToday).toBe(false);
+      expect(answerFindUnique).toHaveBeenCalledWith({
+        where: {
+          anonId_serviceDate: {
+            anonId: 'anon-1',
+            serviceDate: getServiceDate(now),
+          },
+        },
+      });
+    });
+
+    it('본인이 오늘 이미 답변했으면 answeredToday=true (P1)', async () => {
+      const now = new Date('2026-06-19T03:00:00.000Z');
+      findFirst.mockResolvedValue({ id: 1, body: '오늘의 질문', active: true });
+      answerFindUnique.mockResolvedValue({ id: 99 }); // 당일 본인 답변 존재
+
+      const result = await service.getToday('anon-1', now);
+
+      expect(result.answeredToday).toBe(true);
     });
 
     it('오늘 질문이 없으면 question=null로 반환한다', async () => {

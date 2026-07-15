@@ -111,13 +111,14 @@ model Answer {
 
 ## Phase 3 — Answers 모듈 (P1·P4·P5·P6)
 
-- [ ] `prisma/schema.prisma`에 `Answer` 모델(+ `@@unique([anonId, serviceDate])`, `@@index`) → `migrate dev --name add-answer`
-- [ ] `dto/create-answer.dto.ts`: content(MaxLength)·questionId·bgType·bgValue 검증 + `@ApiProperty`
-- [ ] `answers.service.ts` 제출: 금칙어 검사(P6) → serviceDate 계산 → 저장. unique 충돌(P1)을 잡아 **409**로 변환
-- [ ] `answers.service.ts` 타인 답변: 같은 questionId, anonId≠본인, 누적 전체에서 무작위 1건 (P5), 0건 시 `null`
-- [ ] `answers.service.ts` 본인 답변: `findMyAnswerToday(anonId)` — 당일 본인 답변(본문+배경) 또는 null
-- [ ] `answers.controller.ts`: `POST /answers`(anonId 주입), `GET /answers/me`, `GET /answers/others`. others 응답 DTO는 식별정보 제외(8장), Swagger
-- [ ] `answers.service.spec.ts`: 하루1회 차단 / 금칙어 차단 / 타인답변 본인제외·무작위 / 0건(null) / 본인답변 조회
+- [x] `prisma/schema.prisma`에 `Answer` 모델(+ `@@unique([anonId, serviceDate])`, `@@index`) → `migrate dev --name add-answer` <!-- 로컬 DB 인증 실패(P1000)로 migrate 미실행, generate로 Client만 갱신. DB 기동 후 migrate 1회 필요 (ISSUES.md) -->
+- [x] `dto/create-answer.dto.ts`: content(MaxLength)·questionId·bgType·bgValue 검증 + `@ApiProperty`
+- [x] `answers.service.ts` 제출: 금칙어 검사(P6) → serviceDate 계산 → 저장. unique 충돌(P1)을 잡아 **409**로 변환
+- [x] `answers.service.ts` 타인 답변: 같은 questionId, anonId≠본인, 누적 전체에서 무작위 1건 (P5), 0건 시 `null`
+- [x] `answers.service.ts` 본인 답변: `findMyAnswerToday(anonId)` — 당일 본인 답변(본문+배경) 또는 null
+- [x] `answers.controller.ts`: `POST /answers`(anonId 주입), `GET /answers/me`, `GET /answers/others`. others 응답 DTO는 식별정보 제외(8장), Swagger
+- [x] `answers.service.spec.ts`: 하루1회 차단 / 금칙어 차단 / 타인답변 본인제외·무작위 / 0건(null) / 본인답변 조회
+- [x] (연계) `QuestionsService.hasAnsweredToday` stub → `prisma.answer.findUnique`로 실제 연결(P1), seed에 예시 타인 답변 주입(P5 초기 풀)
 
 ## Phase 4 — 마무리
 

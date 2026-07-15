@@ -1,0 +1,40 @@
+{
+  "info": {
+    "name": "데일리 카드 API",
+    "description": "매일 질문 1개에 답하고 감성 카드를 만드는 익명 서비스 백엔드.\n\n- 인증: 로그인 없음. 서버가 `AnonIdGuard`로 익명 식별자 서명 쿠키를 발급/검증한다(P2).\n- Postman은 응답의 Set-Cookie를 쿠키 자로 자동 저장하고 이후 요청에 자동 첨부하므로, 첫 요청 후 동일 익명 ID로 유지된다.\n- `baseUrl` 컬렉션 변수로 로컬/배포 환경을 전환한다.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "questions",
+      "item": [
+        {
+          "name": "오늘의 질문 조회",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/questions/today",
+              "host": ["{{baseUrl}}"],
+              "path": ["questions", "today"]
+            },
+            "description": "오늘(serviceDate·KST 자정 기준)의 질문 + 본인 답변 여부 + serviceDate 조회 (P3).\n\n- 최초 호출 시 서버가 익명 식별자 쿠키를 Set-Cookie로 발급한다(P2).\n- 등록된 질문이 없으면 `question`은 null.\n\n응답 예시:\n```json\n{\n  \"question\": { \"id\": 1, \"body\": \"오늘 하루 중 가장 기억에 남는 순간은 언제였나요?\" },\n  \"answeredToday\": false,\n  \"serviceDate\": \"2026-06-18T15:00:00.000Z\"\n}\n```"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
