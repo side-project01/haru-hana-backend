@@ -29,3 +29,14 @@ export function getServiceDate(now: Date = new Date()): Date {
   // 3) 그 날짜의 KST 자정을 다시 UTC 시각으로 환산한다.
   return new Date(Date.UTC(year, month, day) - KST_OFFSET_MS);
 }
+
+/**
+ * serviceDate(UTC 저장값)를 사람이 읽는 KST 날짜 라벨(`YYYY-MM-DD`)로 변환한다.
+ * 출력·로그 전용이며, 매칭 키로는 쓰지 않는다.
+ * 예) UTC 2026-06-18 15:00 → `'2026-06-19'`
+ */
+export function formatServiceDate(serviceDate: Date): string {
+  return new Date(serviceDate.getTime() + KST_OFFSET_MS)
+    .toISOString()
+    .slice(0, 10);
+}

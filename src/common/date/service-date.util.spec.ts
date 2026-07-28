@@ -1,4 +1,4 @@
-import { getServiceDate } from './service-date.util';
+import { formatServiceDate, getServiceDate } from './service-date.util';
 
 describe('getServiceDate (P7 — KST 자정 기준)', () => {
   it('KST 정오는 같은 날짜의 KST 자정(UTC 전날 15:00)으로 매핑된다', () => {
@@ -47,5 +47,25 @@ describe('getServiceDate (P7 — KST 자정 기준)', () => {
     // KST 2027-01-01 00:00 == UTC 2026-12-31 15:00
     const now = new Date('2026-12-31T15:00:00.000Z');
     expect(getServiceDate(now).toISOString()).toBe('2026-12-31T15:00:00.000Z');
+  });
+});
+
+describe('formatServiceDate (KST 날짜 라벨)', () => {
+  it('serviceDate(UTC 저장값)를 KST 날짜로 표기한다', () => {
+    // UTC 2026-06-18 15:00 == KST 2026-06-19 00:00
+    const serviceDate = new Date('2026-06-18T15:00:00.000Z');
+    expect(formatServiceDate(serviceDate)).toBe('2026-06-19');
+  });
+
+  it('연말 경계: UTC 2026-12-31 15:00은 KST 2027-01-01로 표기된다', () => {
+    expect(formatServiceDate(new Date('2026-12-31T15:00:00.000Z'))).toBe(
+      '2027-01-01',
+    );
+  });
+
+  it('getServiceDate 결과를 그대로 넣으면 그 시각의 KST 날짜가 나온다', () => {
+    // KST 2026-06-19 12:00 == UTC 2026-06-19 03:00
+    const now = new Date('2026-06-19T03:00:00.000Z');
+    expect(formatServiceDate(getServiceDate(now))).toBe('2026-06-19');
   });
 });
