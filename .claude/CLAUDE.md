@@ -186,8 +186,15 @@ src/common/
 - `prisma/schema.prisma`의 `generator.binaryTargets`에 `rhel-openssl-3.0.x`(Vercel 런타임)를 포함한다. 로컬용 `native`와 함께.
 - **마이그레이션은 함수 안에서 자동 실행 금지.** 로컬/CI에서 `prisma migrate deploy`로 별도 수행한다.
 
+**함수 리전 = DB 리전 (성능 최대 함정)**
+- `vercel.json`의 `regions`를 **Neon DB와 같은 리전**으로 반드시 고정한다. 현재: DB가 AWS `ap-southeast-1`(싱가포르)이므로 `"regions": ["sin1"]`. **DB를 옮기면 이 값도 같이 옮긴다.**
+- 지정하지 않으면 Vercel 기본값 `iad1`(미국 버지니아)에서 실행된다. 실측(2026-07-28): 함수 `iad1` ↔ DB 싱가포르 조합에서 `GET /questions/today`(유니크 인덱스 조회 2건)가 **4.5~4.8초**, 리전 정렬 후 **0.2~0.7초**로 약 10배 단축.
+- 왜 이렇게 큰가 — 서버리스는 응답 후 인스턴스를 얼려서 TCP 연결이 끊기고, 다음 요청마다 Prisma가 TCP→SSLRequest→TLS→인증→엔진 초기화를 다시 한다. 요청당 왕복이 20회 가까이 되는데, **그 하나하나에 리전 간 지연(편도 ~230ms)이 곱해진다.** 쿼리를 줄이는 것보다 리전을 맞추는 게 압도적으로 효과적이다.
+- **진단 순서**: 느리면 먼저 `curl -w '%{time_starttransfer}'`로 (a) DB를 타지 않는 라우트와 (b) DB 라우트를 비교한다. (a)만 빠르면 DB 경로 문제다. 실제 실행 리전은 응답 헤더 `X-Vercel-Id: <엣지>::<함수리전>::<id>`의 **두 번째** 필드에서 확인한다.
+- 콜드스타트와 혼동하지 말 것. 연속 호출이 **전부** 느리면 콜드스타트가 아니라 요청당 비용이다.
+
 **설정 파일**
-- `vercel.json`: `buildCommand`에 `prisma generate` 포함(node_modules 캐시로 인한 stale 클라이언트 방지), 전 요청을 `/api`로 rewrite.
+- `vercel.json`: `buildCommand`에 `prisma generate` 포함(node_modules 캐시로 인한 stale 클라이언트 방지), `regions`로 함수 리전 고정(위 참조), 전 요청을 `/api`로 rewrite.
 - 환경변수(`DATABASE_URL`·`COOKIE_SECRET`·`CORS_ORIGINS`·`NODE_ENV`)는 Vercel 대시보드에 등록. `env.validation.ts`가 fail-fast라 누락 시 콜드스타트에서 즉시 실패한다.
 
 **날짜(P7) 주의**
