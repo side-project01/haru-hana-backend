@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node -r dotenv/config prisma/seed.ts"
   },
   "scripts": {
     "build": "nest build",
@@ -21,7 +21,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "questions:add": "ts-node scripts/add-questions.ts"
+    "questions:add": "ts-node -r dotenv/config scripts/add-questions.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -51,6 +51,7 @@
     "@types/node": "^24.0.0",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^7.0.0",
+    "dotenv": "^17.4.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
