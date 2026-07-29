@@ -1,10 +1,19 @@
 // 데일리 카드 Prisma 스키마
 // 학습 자료: https://pris.ly/d/prisma-schema
 
+// Rust 엔진 없는 클라이언트(engineType = "client", v6.16+ GA).
+// 번들이 약 14MB -> 1.6MB로 줄어 서버리스 콜드스타트를 단축한다.
+// binaryTargets는 Rust 엔진이 없으므로 불필요.
+// 커넥션 풀은 driver adapter(@prisma/adapter-pg)의 pg.Pool이 관리한다.
 generator client {
-  provider = "prisma-client-js"
-  // native: 로컬 개발용. rhel-openssl-3.0.x: Vercel 서버리스 런타임용 엔진.
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  runtime      = "nodejs"
+  moduleFormat = "cjs"
+  engineType   = "client"
+  // 상대 import에 확장자를 붙이지 않는다. CJS라 불필요하고,
+  // ".js" 확장자가 붙으면 Jest 리졸버가 생성 파일(.ts)을 찾지 못한다.
+  importFileExtension = ""
 }
 
 datasource db {

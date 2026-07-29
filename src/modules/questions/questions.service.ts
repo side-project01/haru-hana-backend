@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Question } from '@prisma/client';
+import type { Question } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { getServiceDate } from '../../common/date/service-date.util';
 

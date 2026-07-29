@@ -14,13 +14,15 @@
 
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Prisma, PrismaClient } from '../src/generated/prisma/client';
+import { createPrismaPool } from '../src/common/prisma/prisma-pool';
 import {
   formatServiceDate,
   getServiceDate,
 } from '../src/common/date/service-date.util';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ adapter: new PrismaPg(createPrismaPool()) });
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 

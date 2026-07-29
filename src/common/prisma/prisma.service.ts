@@ -1,5 +1,8 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import type { Pool } from 'pg';
+import { PrismaClient } from '../../generated/prisma/client';
+import { createPrismaPool } from './prisma-pool';
 
 /**
  * Prisma 단일 진입점 (CLAUDE.md 8장).
@@ -12,7 +15,18 @@ import { PrismaClient } from '@prisma/client';
  */
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleDestroy {
+  private readonly pool: Pool;
+
+  constructor() {
+    const pool = createPrismaPool();
+    // statementNameGenerator를 넘기지 않으면 prepared statement를 캐시하지 않는다.
+    // Neon pooler(PgBouncer)를 거치는 구성에서 이 기본값이 안전하다.
+    super({ adapter: new PrismaPg(pool) });
+    this.pool = pool;
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.$disconnect();
+    await this.pool.end();
   }
 }

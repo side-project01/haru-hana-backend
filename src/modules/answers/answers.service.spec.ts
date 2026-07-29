@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../../generated/prisma/client';
 import { AnswersService } from './answers.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ProfanityService } from '../../common/moderation/profanity.service';

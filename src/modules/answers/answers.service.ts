@@ -4,7 +4,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { Prisma, type Answer } from '@prisma/client';
+import { Prisma, type Answer } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ProfanityService } from '../../common/moderation/profanity.service';
 import { QuestionsService } from '../questions/questions.service';

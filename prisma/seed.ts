@@ -8,10 +8,12 @@
 //
 // 실행: `npx prisma db seed` (package.json의 prisma.seed 설정 사용)
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '../src/generated/prisma/client';
+import { createPrismaPool } from '../src/common/prisma/prisma-pool';
 import { getServiceDate } from '../src/common/date/service-date.util';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ adapter: new PrismaPg(createPrismaPool()) });
 
 /** 운영자가 큐레이션한 질문 목록 (P3). 시드 시작일부터 하루 1개씩 매핑된다. */
 const QUESTIONS: string[] = [
