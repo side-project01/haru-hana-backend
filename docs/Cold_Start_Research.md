@@ -243,9 +243,9 @@ Neon 공식 문서(`/docs/connect/connection-latency`):
 | Node 버전 고정 | `engines` 없음 | 20+ 필요(바이트코드 캐싱) | ~~갭~~ — Vercel 선택지가 20/22/24뿐이라 자동 충족 |
 | webpack 번들링 | `nest-cli.json`에 webpack 옵션 없음 | 부트스트랩 약 60% 단축(공식 벤치) | ~~갭~~ — `dist/`가 함수 import 그래프 밖 (5-2 참조) |
 | `$connect()` 부팅 시 호출 | `onModuleInit`에서 호출 | 비동기 프로바이더로 부팅 지연 금지 | ~~갭~~ — 비용이 이동할 뿐 총합 동일 (5-2 참조) |
-| Prisma 엔진 | ❌ `prisma-client-js` + Rust 엔진 | `engineType = "client"` (번들 85~90%↓) | **갭** |
-| `attachDatabasePool` | ❌ 미사용 | Fluid + driver adapter 시 권장 | driver adapter 도입 시 함께 |
-| Neon scale-to-zero | ❓ 기본 5분 추정 | 타임아웃 연장/비활성화 | **확인 필요** |
+| Prisma 엔진 | ✅ `prisma-client` + `engineType = "client"` | 동일 | 해소 (5-5 — **단, 콜드스타트 개선 없었음**) |
+| `attachDatabasePool` | ✅ `prisma-pool.ts`에서 호출 | Fluid + driver adapter 시 권장 | 없음 |
+| Neon scale-to-zero | ❌ 5분 고정 (Free 플랜) | 타임아웃 연장/비활성화 | **불가** — 유료 전용 (5-0) |
 
 ### Swagger 관련 추가 사실
 
@@ -276,17 +276,15 @@ Neon 공식 문서(`/docs/connect/connection-latency`):
 > **결론: 무료 스택에서 콜드스타트는 반드시 발생한다.** 인프라 설정으로 없앨 방법이 없다.
 > 5분마다 Neon 컴퓨트가 suspend되고, Vercel 인스턴스도 웜 보장이 없다.
 
-### 5-1. 유효한 방안 (무료 스택 기준)
+### 5-1. 유효한 방안 (무료 스택 기준) — 실행 결과 반영
 
-1. **Fluid compute 토글 확인** — Hobby에서도 쓸 수 있다. 꺼져 있으면 켠다. 비용 0.
-   (2025-04-23 이후 생성 프로젝트는 기본 활성화)
-2. **Prisma `engineType = "client"` 이관** — 번들 14MB → 1.6MB(85~90%↓).
-   무료 스택에 남는 **유일한 실질적 코드 레벨 개선**이다. 다만 제너레이터 교체
-   (`prisma-client-js` → `prisma-client`, import 경로 변경) + driver adapter 도입 +
-   `attachDatabasePool`까지 묶인 작업이므로 별도 작업 단위로 잡을 것.
-   **착수 전 5-3의 실측 콜드스타트 수치로 값어치를 판단할 것.**
-3. **유료 전환** — 위 두 가지로 부족하면 이게 유일한 남은 수단이다.
-   Vercel Pro(pre-warm) 또는 Neon 유료(scale-to-zero 비활성화). 서비스 규모상 과한 선택일 수 있다.
+| 방안 | 상태 |
+|---|---|
+| **Fluid compute 토글 확인** | 미확인. Hobby에서도 쓸 수 있으니 꺼져 있으면 켠다. 비용 0. (2025-04-23 이후 생성 프로젝트는 기본 활성화) |
+| **Prisma `engineType = "client"` 이관** | **실행 완료 — 콜드스타트 개선 없음(5-5).** 번들은 14MB → 1.6MB로 줄었으나 부팅 시간은 그대로. 다른 근거(Prisma 7 정방향)로 유지 |
+| **유료 전환** | **남은 유일한 수단.** Vercel Pro(pre-warm) 또는 Neon 유료(scale-to-zero 비활성화). 서비스 규모상 과할 수 있다 |
+
+> 결론은 5-6 참조. **무료 스택에서 코드로 줄일 수 있는 것은 이미 다 시도했다.**
 
 ### 5-2. 철회한 방안과 그 이유
 
@@ -342,14 +340,89 @@ Neon 공식 문서(`/docs/connect/connection-latency`):
 Prisma는 첫 쿼리 시 자동 연결하므로 기능상 안전하다(공식 문서 확인).
 이제 `/__no_such_route`는 DB를 전혀 건드리지 않으므로 **순수 앱 부팅**을 측정한다.
 
-| 항목 | 값 |
-|---|---|
-| COLD `/__no_such_route` (순수 NestJS 부팅) | (측정 예정) |
-| COLD `/questions/today` (부팅 + Neon 웨이크업 + 쿼리) | (측정 예정) |
-| 차이 = Neon 웨이크업 몫 | (측정 예정) |
+**측정 결과 (10분 유휴 후, 순서대로)**
 
-이 결과로 **Prisma `engineType = "client"` 이관의 값어치를 판단한다** —
-이관이 줄이는 건 앱 부팅 몫뿐이고 Neon 몫은 무료 플랜에서 손댈 수 없다.
+| 순서 | 요청 | ttfb | 웜 기준선 뺀 순수 비용 |
+|---|---|---|---|
+| 1 | COLD `/__no_such_route` | 1.695s | **앱 부팅 ≈ 1.55s (63%)** |
+| 2 | COLD `/questions/today` | 1.098s | **Neon 웨이크업 ≈ 0.91s (37%)** |
+| 3 | warm `/questions/today` | 0.192s | — |
+| 4 | warm `/__no_such_route` | 0.143s | — |
+
+**검산 통과**: 1.55 + 0.91 = 2.46s. 변경 전 콜드스타트 페널티(2.462 − 0.208 = 2.25s)와
+오차 0.2초 내로 일치한다.
+
+**부수 효과 확인**: `$connect()` 제거로 DB를 타지 않는 라우트의 콜드 응답이
+**2.285s → 1.695s**로 줄었다. DB 라우트 총합은 예상대로 변화 없다(비용이 이동할 뿐).
+
+---
+
+## 5-5. Prisma `engineType = "client"` 이관 — 실행했으나 **개선 없음**
+
+5-4에서 앱 부팅이 더 큰 몫(63%)으로 나왔으므로 Rust 엔진 제거를 시도했다.
+번들은 문서대로 줄었으나(**14MB → 1.6MB**) **콜드스타트는 줄지 않았다.**
+
+**동일 절차로 이관 전후 비교** (대기 시간·요청 순서·라우트 모두 동일)
+
+| 항목 | 이관 전 | 이관 후 | 변화 |
+|---|---|---|---|
+| COLD 404 (순수 앱 부팅) | 1.695s | 1.799s | +0.10 |
+| COLD today (Neon 웨이크업) | 1.098s | 1.366s | +0.27 |
+| warm today | 0.192s | 0.201s | +0.01 |
+| warm 404 | 0.143s | 0.176s | +0.03 |
+
+| 순수 비용 | 이관 전 | 이관 후 |
+|---|---|---|
+| 앱 부팅 | 1.55s | 1.62s |
+| Neon 웨이크업 | 0.91s | 1.17s |
+
+**해석 주의 — 양쪽 다 표본 1회다.** +0.07~0.27초 차이가 노이즈인지 실제 악화인지
+구분할 수 없다(앞선 측정에서도 콜드값이 2.285~2.462초로 흔들렸다).
+**확실한 것은 "기대했던 크기의 개선(수백 ms 이상)은 없었다"는 것뿐이다.**
+
+> 소거법상 1.55초의 대부분이 Prisma 모듈 로딩이 아니라 NestJS 부트스트랩
+> 자체(DI 컨테이너 구성·데코레이터 메타데이터·모듈 그래프 해석)라는 뜻이 되지만,
+> **이는 측정으로 직접 확인한 것이 아니므로 단정하지 말 것.**
+
+### 그럼에도 이관을 유지한 이유
+
+콜드스타트 근거는 무산됐지만 **별개의 근거로 유지한다**:
+
+- Prisma 7에서 `prisma-client`가 **기본 제너레이터**이고, `prisma-client-js`는
+  *"will be removed in future releases"* (공식 업그레이드 가이드)
+- Prisma 7은 **모든 DB에 driver adapter를 필수**로 요구한다
+- 이 레포 `ISSUES.md` Phase 0에 v7 전환을 문서 정합성 때문에 **의도적으로 미룬 기록**이 있다.
+  이번 이관이 그 보류 결정을 해소했다.
+
+즉 어차피 해야 할 이관을 앞당긴 것이며, 되돌리면 Prisma 7 업그레이드 때 반복하게 된다.
+
+### 이관 과정에서 드러난 것
+
+| 항목 | 내용 |
+|---|---|
+| 커넥션 풀 주체 변경 | Prisma → `pg.Pool`. `DATABASE_URL`의 `connection_limit`(Prisma 전용)이 **무시되므로** `pg.Pool`의 `max: 1`로 대체했다. 놓치면 서버리스 커넥션 폭발 위험 |
+| PgBouncer 안전성 | `adapter-pg`는 `statementNameGenerator` 미지정 시 prepared statement를 캐시하지 않는다(패키지 타입 주석·구현 확인). Neon pooler 경유 구성에서 **기본값이 안전** |
+| TLS 동작 변경 | `pg`는 `sslmode=require`를 **verify-full**로 취급한다. 배포 후 9분간 30초 간격 16회 폴링 **전부 200**으로 정상 확인 |
+| `.env` 자동 로딩 상실 | `prisma-client-js`가 하던 `.env` 로딩이 사라져 `npm run questions:add`가 깨졌다. `dotenv` 명시 추가 + `ts-node -r dotenv/config`로 복구 |
+| Jest 리졸버 | 생성 코드의 `./x.js` import를 Jest가 해석 못 함 → `importFileExtension = ""`로 해결 (우리 사정에 맞춘 선택, 범용 권장 아님) |
+
+---
+
+## 5-6. 결론 — 무료 스택에서 여기가 바닥이다
+
+```
+콜드스타트 약 2.4초
+├─ 앱 부팅        약 1.6초  ← NestJS 부트스트랩. Prisma 축소로 안 줄어듦(5-5)
+└─ Neon 웨이크업  약 1.2초  ← Neon Free 5분 고정, 손댈 수 없음(5-0)
+```
+
+- Vercel pre-warm(유료), Neon scale-to-zero 비활성화(유료) 둘 다 막혀 있다
+- 앱 레이어에서 시도할 만한 것(webpack·`engines.node`·`$connect()`·Prisma 엔진)은
+  전부 검증했고, **콜드스타트를 줄인 것은 없다**
+- 더 줄이려면 **유료 전환**이 유일한 남은 수단이다
+
+> 하루 1회 쓰는 서비스에서 "첫 진입 2.4초, 이후 0.2초"는 감수 가능한 값일 수 있다.
+> 이건 기술 문제가 아니라 서비스 품질 판단이다.
 
 ---
 
@@ -359,23 +432,35 @@ Prisma는 첫 쿼리 시 자동 연결하므로 기능상 안전하다(공식 �
 - Fluid compute의 4가지 콜드스타트 기능과 **플랜/환경 제약**(pre-warm = 유료·프로덕션, 바이트코드 캐싱 = Node 20+·프로덕션)
 - NestJS 벤치마크 수치 (**NestJS 팀이 측정한 값**, 우리 앱 아님)
 - Prisma 번들 크기 14MB → 1.6MB, v6.16.0 GA, `prisma-client-js` 미검증 경고
-- Neon scale-to-zero 기본 5분 / "a few hundred milliseconds"
+- Prisma 7: `prisma-client`가 기본 제너레이터, `prisma-client-js` 제거 예정, driver adapter 필수
+- Neon scale-to-zero 기본 5분 / "a few hundred milliseconds" / **Free 플랜은 설정 고정**
 - Vercel 커뮤니티 스태프의 "cron 워밍 비권장" 답변
 - 99.37% 무콜드스타트 — **Vercel 블로그의 자사 주장**이며 플랜 조건이 붙는다
 
-**레포 코드로 확인한 것**
+**레포/패키지 코드로 확인한 것**
 - `cachedApp` 캐싱, `regions: sin1`, `engines` 부재, `nest-cli.json`에 webpack 없음,
-  `onModuleInit`의 `$connect()`, `prisma-client-js` + `binaryTargets`, DTO의 `@nestjs/swagger` import
+  DTO의 `@nestjs/swagger` import
+- `api/index.ts`가 `dist/`가 아니라 `../src/app.module`(TS 소스)를 import한다는 사실
+- `@prisma/adapter-pg`의 `statementNameGenerator` 미지정 시 prepared statement 미캐시
+  (패키지 타입 주석 + `dist/index.js` 구현)
 
-**직접 측정한 것** (5-3)
-- 웜 상태 ttfb, DB/비DB 라우트 비교, `X-Vercel-Id`의 실행 리전
-- 유휴 구간별 콜드스타트 (측정 진행 중)
+**직접 측정한 것** (5-3 / 5-4 / 5-5)
+- 웜 ttfb, DB/비DB 라우트 비교, `X-Vercel-Id`의 실행 리전
+- 콜드스타트 약 2.1~2.3초 (2회 재현), 웜 0.15~0.21초
+- 앱 부팅 ≈ 1.55초 / Neon 웨이크업 ≈ 0.91초 분리 (검산 통과)
+- Prisma 이관 전후 비교 — **개선 없음**
+- 이관 배포의 건전성 (30초 간격 16회 전부 200)
 
 **확인하지 않은 것 — 인용 금지**
-- 개선안 적용 **후**의 수치. 개선 효과(ms)는 아직 미지수다.
-- 우리 프로젝트의 Vercel 플랜, Fluid 활성화 여부, Neon suspend 설정값 — 전부 대시보드 미확인.
+- **5-5의 이관 전후 차이는 양쪽 표본 1회다.** +0.07~0.27초가 노이즈인지 실제 악화인지
+  구분할 수 없다. "개선이 없었다"까지만 말할 수 있고 "느려졌다"고 말하면 안 된다.
+- **앱 부팅 1.6초의 내부 구성**(NestJS DI vs 데코레이터 vs 모듈 그래프)은 측정하지 않았다.
+  5-5의 "대부분이 NestJS 부트스트랩"은 소거법에 의한 추정이다.
+- 우리 프로젝트의 Vercel 플랜 토글(Fluid 활성화 여부)은 대시보드 미확인.
+  (플랜이 Hobby, Neon이 Free라는 것은 확인됨)
 - Vercel이 `api/index.ts`를 내부적으로 어떤 번들러로 처리하는지 — 공식 문서에서 확인하지 못했다.
-  따라서 "webpack 도입 시 우리 앱이 60% 빨라진다"고 말할 수 없다. **NestJS 자체 벤치 수치일 뿐이다.**
+- `X-Vercel-Id`의 세 번째 필드는 **요청 식별자이지 인스턴스 식별자가 아니다.**
+  (초기 분석에서 인스턴스 근거로 인용했으나 오류. 콜드스타트 결론은 타이밍 근거만으로 성립한다.)
 
 ---
 

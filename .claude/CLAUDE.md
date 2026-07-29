@@ -1,6 +1,6 @@
-# CLAUDE.md — 데일리 카드 백엔드 개발 컨벤션
+# CLAUDE.md — 하루 하나 백엔드 개발 컨벤션
 
-이 문서는 데일리 카드(Daily Card) 백엔드를 개발할 때 따라야 할 규칙이다.
+이 문서는 하루 하나(Haru Hana) 백엔드를 개발할 때 따라야 할 규칙이다.
 기획 배경은 [`docs/PRD_데일리카드.md`](../docs/PRD_데일리카드.md) 참고. 정책 번호(P1~P7)는 PRD 4장을 가리킨다.
 
 ## 1. 개요 & 스택
@@ -182,9 +182,12 @@ src/common/
 - 부팅한 앱은 모듈 전역 변수에 **캐시**해 웜 인스턴스에서 재부팅하지 않는다.
 
 **DB 커넥션 (서버리스 최대 함정)**
-- 배포용 `DATABASE_URL`은 반드시 **pooled 엔드포인트**(Neon `-pooler`)를 쓴다. 파라미터에 `pgbouncer=true&connection_limit=1`을 붙여 함수 인스턴스당 커넥션 1개로 제한 → 커넥션 폭발 방지.
-- `prisma/schema.prisma`의 `generator.binaryTargets`에 `rhel-openssl-3.0.x`(Vercel 런타임)를 포함한다. 로컬용 `native`와 함께.
+- 배포용 `DATABASE_URL`은 반드시 **pooled 엔드포인트**(Neon `-pooler`)를 쓴다.
+- **커넥션 수 제한은 `pg.Pool`의 `max`로 한다** — `src/common/prisma/prisma-pool.ts`의 `MAX_CONNECTIONS = 1`. Rust 엔진 없는 클라이언트(`engineType = "client"`)에서는 커넥션 풀을 Prisma가 아니라 driver adapter의 `pg.Pool`이 관리하므로, URL의 `connection_limit`·`pgbouncer`는 **Prisma 전용 파라미터라 무시된다.** 이 값을 URL에서 조정하려 하지 말 것.
+- `binaryTargets`는 쓰지 않는다. Rust 엔진이 없다.
+- **prepared statement를 캐시하지 않는 기본값을 유지한다.** `PrismaPg`에 `statementNameGenerator`를 넘기면 named prepared statement가 생겨 Neon pooler(PgBouncer) 경유 시 깨질 수 있다.
 - **마이그레이션은 함수 안에서 자동 실행 금지.** 로컬/CI에서 `prisma migrate deploy`로 별도 수행한다.
+- **`.env`는 자동 로딩되지 않는다.** `prisma-client-js`가 하던 로딩이 사라졌으므로, `ts-node`로 도는 운영 스크립트는 `-r dotenv/config`를 붙인다(`package.json` 참고).
 
 **함수 리전 = DB 리전 (성능 최대 함정)**
 - `vercel.json`의 `regions`를 **Neon DB와 같은 리전**으로 반드시 고정한다. 현재: DB가 AWS `ap-southeast-1`(싱가포르)이므로 `"regions": ["sin1"]`. **DB를 옮기면 이 값도 같이 옮긴다.**
