@@ -238,8 +238,8 @@ Neon 공식 문서(`/docs/connect/connection-latency`):
 | 앱 인스턴스 캐싱 | ✅ `cachedApp` 전역 캐시 (`api/index.ts:19`) | 권장 | 없음 |
 | 함수/DB 리전 정렬 | ✅ `sin1` = Neon `ap-southeast-1` | 권장 | 없음 |
 | Swagger 서버리스 제외 | ✅ `api/index.ts`에서 `SwaggerModule.setup` 미호출 | — | **부분적** (아래) |
-| Fluid compute | ❓ `vercel.json`에 `fluid` 없음 | 2025-04-23 이후 프로젝트는 기본 ON | **대시보드 확인 필요** |
-| 플랜 | ❓ (Hobby 추정) | pre-warm은 유료 전용 | **확인 필요** |
+| Fluid compute | ✅ **활성화됨** (대시보드 확인, 2026-07-29) | 기본 ON | 없음 — 5-3~5-5의 측정값은 **모두 Fluid 켜진 상태**의 값이다 |
+| 플랜 | Vercel **Hobby** + Neon **Free** (확인됨) | pre-warm은 유료 전용 | **불가** (5-0) |
 | Node 버전 고정 | `engines` 없음 | 20+ 필요(바이트코드 캐싱) | ~~갭~~ — Vercel 선택지가 20/22/24뿐이라 자동 충족 |
 | webpack 번들링 | `nest-cli.json`에 webpack 옵션 없음 | 부트스트랩 약 60% 단축(공식 벤치) | ~~갭~~ — `dist/`가 함수 import 그래프 밖 (5-2 참조) |
 | `$connect()` 부팅 시 호출 | `onModuleInit`에서 호출 | 비동기 프로바이더로 부팅 지연 금지 | ~~갭~~ — 비용이 이동할 뿐 총합 동일 (5-2 참조) |
@@ -280,7 +280,7 @@ Neon 공식 문서(`/docs/connect/connection-latency`):
 
 | 방안 | 상태 |
 |---|---|
-| **Fluid compute 토글 확인** | 미확인. Hobby에서도 쓸 수 있으니 꺼져 있으면 켠다. 비용 0. (2025-04-23 이후 생성 프로젝트는 기본 활성화) |
+| **Fluid compute 토글 확인** | **확인 완료 — 이미 활성화되어 있었다**(2026-07-29). 따라서 5-3~5-5의 모든 측정값은 Fluid가 켜진 상태의 값이며, optimized concurrency와 바이트코드 캐싱 효과는 **이미 2.4초 안에 반영되어 있다.** 여기서 추가로 얻을 것은 없다 |
 | **Prisma `engineType = "client"` 이관** | **실행 완료 — 콜드스타트 개선 없음(5-5).** 번들은 14MB → 1.6MB로 줄었으나 부팅 시간은 그대로. 다른 근거(Prisma 7 정방향)로 유지 |
 | **유료 전환** | **남은 유일한 수단.** Vercel Pro(pre-warm) 또는 Neon 유료(scale-to-zero 비활성화). 서비스 규모상 과할 수 있다 |
 
@@ -416,10 +416,14 @@ Prisma는 첫 쿼리 시 자동 연결하므로 기능상 안전하다(공식 �
 └─ Neon 웨이크업  약 1.2초  ← Neon Free 5분 고정, 손댈 수 없음(5-0)
 ```
 
+- **Fluid compute는 이미 켜져 있다.** 위 2.4초는 Fluid의 optimized concurrency와
+  바이트코드 캐싱이 **이미 적용된 상태**의 값이다. 여기서 더 얻을 것은 없다
 - Vercel pre-warm(유료), Neon scale-to-zero 비활성화(유료) 둘 다 막혀 있다
 - 앱 레이어에서 시도할 만한 것(webpack·`engines.node`·`$connect()`·Prisma 엔진)은
   전부 검증했고, **콜드스타트를 줄인 것은 없다**
 - 더 줄이려면 **유료 전환**이 유일한 남은 수단이다
+
+> 미확인 변수가 남아 있지 않다. 이 결론은 추정이 아니라 측정과 플랜 제약으로 닫혔다.
 
 > 하루 1회 쓰는 서비스에서 "첫 진입 2.4초, 이후 0.2초"는 감수 가능한 값일 수 있다.
 > 이건 기술 문제가 아니라 서비스 품질 판단이다.
