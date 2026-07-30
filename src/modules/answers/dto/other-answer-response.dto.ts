@@ -1,27 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { BG_TYPES } from '../answers.constants';
-import type { BgType } from '../answers.constants';
+import { OtherAnswerDto } from './other-answer.dto';
 
 /**
- * 타인 답변 응답 DTO (`GET /answers/others`).
+ * `GET /answers/others` 응답 DTO.
+ * - answer: 같은 질문의 타인 답변 1건(무작위). 노출할 답변이 없으면 null
  *
- * 프라이버시(CLAUDE.md 8장, PRD 8장): 작성자 식별 정보(anonId·createdAt·id 등)는
- * 절대 포함하지 않는다. 본문과 카드 배경만 노출한다.
+ * 0건은 오류가 아니라 정상 결과이므로 404가 아니라 `answer: null`로 표현한다.
+ * 없음을 객체 안의 null로 담는 이유는 [`MyAnswerResponseDto`](./my-answer-response.dto.ts) 주석 참고.
  */
 export class OtherAnswerResponseDto {
   @ApiProperty({
-    description: '답변 본문',
-    example: '나도 오늘 하늘이 예뻤어요.',
+    type: OtherAnswerDto,
+    nullable: true,
+    description: '타인 답변 1건. 노출할 답변이 없으면 null',
   })
-  content: string;
-
-  @ApiProperty({
-    description: '카드 배경 타입',
-    enum: BG_TYPES,
-    example: 'gradient',
-  })
-  bgType: BgType;
-
-  @ApiProperty({ description: '카드 배경 값', example: 'sunset' })
-  bgValue: string;
+  answer: OtherAnswerDto | null;
 }

@@ -1,32 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { BG_TYPES } from '../answers.constants';
-import type { BgType } from '../answers.constants';
+import { MyAnswerDto } from './my-answer.dto';
 
 /**
- * 본인 답변 응답 DTO (`GET /answers/me`, `POST /answers`).
- * 카드 다시보기 재진입용(5.2/5.3). 본인 데이터이므로 본문·배경·질문 참조를 반환한다.
- * (anonId는 쿠키로 이미 식별되므로 응답에 담지 않는다 — 과다 노출 방지, CLAUDE.md 5장)
+ * `GET /answers/me` 응답 DTO.
+ * - answer: 오늘(serviceDate) 본인 답변. 아직 답변하지 않았으면 null
+ *
+ * 없음을 **최상위 null이 아니라 객체 안의 null**로 표현한다
+ * (`TodayQuestionResponseDto.question`과 동일한 규약).
+ * 컨트롤러가 `null`을 그대로 반환하면 Nest의 Express 어댑터가 `isNil(body)`에서
+ * `response.send()`로 끝내 **본문 없는 200**(`Content-Length: 0`, Content-Type 없음)이 되고,
+ * 클라이언트의 `res.json()`이 SyntaxError로 실패한다. 그러면 "없음"과 "본문 유실"도 구분할 수 없다.
  */
 export class MyAnswerResponseDto {
-  @ApiProperty({ description: '답변 ID', example: 10 })
-  id: number;
-
-  @ApiProperty({ description: '질문 ID', example: 1 })
-  questionId: number;
-
   @ApiProperty({
-    description: '답변 본문',
-    example: '오늘은 산책하며 노을을 봤어요.',
+    type: MyAnswerDto,
+    nullable: true,
+    description: '오늘 본인 답변. 아직 답변하지 않았으면 null',
   })
-  content: string;
-
-  @ApiProperty({
-    description: '카드 배경 타입',
-    enum: BG_TYPES,
-    example: 'color',
-  })
-  bgType: BgType;
-
-  @ApiProperty({ description: '카드 배경 값', example: '#FFE8D6' })
-  bgValue: string;
+  answer: MyAnswerDto | null;
 }
