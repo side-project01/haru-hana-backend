@@ -30,7 +30,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["questions", "today"]
             },
-            "description": "오늘(serviceDate·KST 자정 기준)의 질문 + 본인 답변 여부 + serviceDate 조회 (P3).\n\n- 최초 호출 시 서버가 익명 식별자 쿠키를 Set-Cookie로 발급한다(P2).\n- 등록된 질문이 없으면 `question`은 null.\n\n응답 예시:\n```json\n{\n  \"question\": { \"id\": 1, \"body\": \"오늘 하루 중 가장 기억에 남는 순간은 언제였나요?\" },\n  \"answeredToday\": false,\n  \"serviceDate\": \"2026-06-18T15:00:00.000Z\"\n}\n```"
+            "description": "오늘(serviceDate·KST 자정 기준)의 질문 + serviceDate 조회 (P3).\n\n- 최초 호출 시 서버가 익명 식별자 쿠키를 Set-Cookie로 발급한다(P2).\n- 등록된 질문이 없으면 `question`은 null.\n- 당일 본인 답변 여부는 `GET /answers/me`가 단일 진실이다(이 응답에 담지 않는다).\n\n응답 예시:\n```json\n{\n  \"question\": { \"id\": 1, \"body\": \"오늘 하루 중 가장 기억에 남는 순간은 언제였나요?\" },\n  \"serviceDate\": \"2026-06-18T15:00:00.000Z\"\n}\n```"
           },
           "response": []
         }

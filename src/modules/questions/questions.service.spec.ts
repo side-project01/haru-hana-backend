@@ -43,47 +43,35 @@ describe('QuestionsService (P3 — 1일 1질문)', () => {
   });
 
   describe('getToday', () => {
-    it('질문·answeredToday·serviceDate를 함께 반환한다', async () => {
+    it('질문과 serviceDate를 함께 반환한다', async () => {
       const now = new Date('2026-06-19T03:00:00.000Z');
       const question = { id: 1, body: '오늘의 질문', active: true };
       findFirst.mockResolvedValue(question);
 
-      const result = await service.getToday('anon-1', now);
+      const result = await service.getToday(now);
 
       expect(result.question).toBe(question);
       expect(result.serviceDate).toEqual(getServiceDate(now));
-      // 본인 당일 답변이 없으면 answeredToday=false (P1)
-      expect(result.answeredToday).toBe(false);
-      expect(answerFindUnique).toHaveBeenCalledWith({
-        where: {
-          anonId_serviceDate: {
-            anonId: 'anon-1',
-            serviceDate: getServiceDate(now),
-          },
-        },
-      });
     });
 
-    it('본인이 오늘 이미 답변했으면 answeredToday=true (P1)', async () => {
-      const now = new Date('2026-06-19T03:00:00.000Z');
+    it('답변 여부를 조회하지 않는다 — 부팅 경로의 DB 왕복을 1건으로 유지한다', async () => {
       findFirst.mockResolvedValue({ id: 1, body: '오늘의 질문', active: true });
-      answerFindUnique.mockResolvedValue({ id: 99 }); // 당일 본인 답변 존재
 
-      const result = await service.getToday('anon-1', now);
+      await service.getToday(new Date('2026-06-19T03:00:00.000Z'));
 
-      expect(result.answeredToday).toBe(true);
+      // 당일 본인 답변 여부의 단일 진실은 GET /answers/me 다.
+      expect(answerFindUnique).not.toHaveBeenCalled();
+      expect(findFirst).toHaveBeenCalledTimes(1);
     });
 
     it('오늘 질문이 없으면 question=null로 반환한다', async () => {
       findFirst.mockResolvedValue(null);
 
       const result = await service.getToday(
-        'anon-1',
         new Date('2026-06-19T03:00:00.000Z'),
       );
 
       expect(result.question).toBeNull();
-      expect(result.answeredToday).toBe(false);
     });
   });
 });
