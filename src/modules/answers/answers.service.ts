@@ -96,12 +96,65 @@ export class AnswersService {
   }
 
   /**
-   * 같은 질문에 대한 타인 답변 무작위 1건을 반환한다 (P5).
-   * 누적 전체에서 본인(anonId) 답변을 제외하고 무작위로 1건을 고른다. 0건이면 null.
-   * @param questionId 대상 질문
-   * @param anonId 본인 식별자(제외 대상)
+   * 같은 질문에 대한 타인 답변 1건을 반환한다 (P5).
+   *
+   * 첫 조회에서 무작위로 뽑고 그 결과를 OtherAnswerPick에 기록해, 이후 재조회·새로고침에도
+   * 같은 답변만 보이게 한다(고정 노출). 사용자별 배정이라 같은 답변이 여러 사용자에게
+   * 배정될 수 있다 — answerId에 유니크를 두지 않는 이유(P5).
+   *
+   * 이름이 find*가 아닌 이유: 조회지만 첫 호출에 배정을 기록하는 쓰기가 섞인다.
+   * 반복 호출 결과는 항상 같으므로(수렴) GET으로 노출해도 무방하다.
+   *
+   * 타인 답변이 0건이면 배정을 남기지 않고 null을 반환한다. 그래야 나중에 답변이 쌓인 뒤
+   * 다시 들어왔을 때 정상적으로 추첨된다(그날 첫 답변자 대응).
+   *
+   * @param questionId 대상 질문(배정 단위). 질문은 하루 1개이므로 사실상 하루 1건(P3)
+   * @param anonId 본인 식별자(추첨 제외 대상이자 배정 주체)
    */
-  async findOtherAnswer(
+  async getOrAssignOtherAnswer(
+    questionId: number,
+    anonId: string,
+  ): Promise<Answer | null> {
+    const assigned = await this.findAssignedOtherAnswer(questionId, anonId);
+    if (assigned) return assigned;
+
+    const candidate = await this.drawRandomOtherAnswer(questionId, anonId);
+    if (!candidate) return null;
+
+    try {
+      await this.prisma.otherAnswerPick.create({
+        data: { anonId, questionId, answerId: candidate.id },
+      });
+      return candidate;
+    } catch (error) {
+      // P2002: 동시 요청이 먼저 배정을 기록함. 먼저 저장된 배정을 따라야 고정이 깨지지 않는다.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return (
+          (await this.findAssignedOtherAnswer(questionId, anonId)) ?? candidate
+        );
+      }
+      throw error;
+    }
+  }
+
+  /** 이미 배정된 타인 답변을 조회한다. 없으면 null. */
+  private async findAssignedOtherAnswer(
+    questionId: number,
+    anonId: string,
+  ): Promise<Answer | null> {
+    const pick = await this.prisma.otherAnswerPick.findUnique({
+      where: { anonId_questionId: { anonId, questionId } },
+      include: { answer: true },
+    });
+
+    return pick?.answer ?? null;
+  }
+
+  /** 본인을 제외한 후보 중 무작위 1건을 뽑는다(기록하지 않는다). 후보가 0건이면 null. */
+  private async drawRandomOtherAnswer(
     questionId: number,
     anonId: string,
   ): Promise<Answer | null> {

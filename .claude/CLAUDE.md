@@ -120,7 +120,7 @@ export class CreateAnswerDto {
 
 **핵심 제약 (PRD 매핑)**
 - **P1 하루 1회**: `Answer`에 `@@unique([anonId, serviceDate])` 제약을 둬 DB 레벨에서 중복 답변을 차단한다(애플리케이션 체크만 믿지 않는다).
-- **P5 타인 답변**: 같은 `questionId`에서 `anonId != 본인`인 답변 중 무작위 1건 조회.
+- **P5 타인 답변**: 같은 `questionId`에서 `anonId != 본인`인 답변 중 무작위 1건 조회. 첫 조회 결과는 `OtherAnswerPick`에 기록하고 `@@unique([anonId, questionId])`로 사용자·질문당 1건을 강제해 **재조회에도 같은 답변이 나오게** 한다. `answerId`에는 유니크를 두지 않는다 — 같은 답변이 여러 사용자에게 배정될 수 있다.
 
 **날짜 규칙 (P7) — 매우 중요**
 - "서비스 날짜(`serviceDate`)"는 **KST 자정 기준**으로 계산한다. 사용자 로컬 시간과 무관.
@@ -147,7 +147,7 @@ src/modules/
 │  └─ dto/
 └─ answers/                  # 답변
    ├─ answers.controller.ts     # POST /answers, GET /answers/others
-   ├─ answers.service.ts        # 제출(P1 하루1회·P6 금칙어), 타인답변 무작위 1건(P5)
+   ├─ answers.service.ts        # 제출(P1 하루1회·P6 금칙어), 타인답변 배정·고정(P5)
    ├─ answers.module.ts
    └─ dto/create-answer.dto.ts
 
@@ -161,7 +161,7 @@ src/common/
 |---|---|---|
 | `questions` | 오늘의 질문(serviceDate 매칭) 조회. 순환 로직 아님, DB 조회 | P3, 6.1 |
 | `answers` 제출 | 익명 ID + serviceDate 유니크로 하루 1회 보장, 금칙어 검사 후 저장 | P1, P4, P6 |
-| `answers` 타인 조회 | 같은 질문, 본인 제외, 무작위 1건 | P5 |
+| `answers` 타인 조회 | 같은 질문, 본인 제외, 무작위 1건 → 첫 조회 시 배정 기록 후 고정 노출 | P5 |
 | `service-date.util` | KST 자정 기준 날짜 계산(전 도메인 공용) | P7 |
 | `anon-id` | 무로그인 익명 식별자 발급/검증(쿠키) | P2 |
 | `profanity.service` | 제출 콘텐츠 금칙어 차단 | P6 |

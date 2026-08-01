@@ -13,7 +13,7 @@ describe('AnswersController — 응답 계약', () => {
   let controller: AnswersController;
   let create: jest.Mock;
   let findMyAnswerToday: jest.Mock;
-  let findOtherAnswer: jest.Mock;
+  let getOrAssignOtherAnswer: jest.Mock;
 
   /** 서비스가 돌려주는 Answer 엔티티(식별정보 포함 — 응답에 새어나가면 안 된다). */
   const saved = {
@@ -44,12 +44,12 @@ describe('AnswersController — 응답 계약', () => {
   beforeEach(() => {
     create = jest.fn();
     findMyAnswerToday = jest.fn();
-    findOtherAnswer = jest.fn();
+    getOrAssignOtherAnswer = jest.fn();
 
     const service = {
       create,
       findMyAnswerToday,
-      findOtherAnswer,
+      getOrAssignOtherAnswer,
     } as unknown as AnswersService;
 
     controller = new AnswersController(service);
@@ -76,7 +76,7 @@ describe('AnswersController — 응답 계약', () => {
 
   describe('GET /answers/others', () => {
     it('타인 답변이 있으면 식별정보 없이 answer에 담아 반환한다', async () => {
-      findOtherAnswer.mockResolvedValue(saved);
+      getOrAssignOtherAnswer.mockResolvedValue(saved);
 
       // 프라이버시(8장): anonId·id·serviceDate는 절대 노출하지 않는다.
       // (toEqual은 정확 비교라 추가 프로퍼티가 새어나가면 실패한다)
@@ -87,11 +87,11 @@ describe('AnswersController — 응답 계약', () => {
           bgValue: '#FFE8D6',
         },
       });
-      expect(findOtherAnswer).toHaveBeenCalledWith(1, 'anon-1');
+      expect(getOrAssignOtherAnswer).toHaveBeenCalledWith(1, 'anon-1');
     });
 
     it('노출할 타인 답변이 0건이면 { answer: null }을 반환한다', async () => {
-      findOtherAnswer.mockResolvedValue(null);
+      getOrAssignOtherAnswer.mockResolvedValue(null);
 
       const result = await controller.findOther('anon-1', 1);
 

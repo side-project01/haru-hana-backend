@@ -58,7 +58,8 @@ export class AnswersController {
 
   @Get('others')
   @ApiOperation({
-    summary: '타인 답변 무작위 1건 (본인 제외, 없으면 answer: null)',
+    summary:
+      '타인 답변 1건 (본인 제외, 첫 조회 시 무작위 배정 후 고정, 없으면 answer: null)',
   })
   @ApiQuery({ name: 'questionId', type: Number })
   @ApiOkResponse({ type: OtherAnswerResponseDto })
@@ -66,7 +67,7 @@ export class AnswersController {
     @AnonId() anonId: string,
     @Query('questionId', ParseIntPipe) questionId: number,
   ): Promise<OtherAnswerResponseDto> {
-    const answer = await this.answersService.findOtherAnswer(
+    const answer = await this.answersService.getOrAssignOtherAnswer(
       questionId,
       anonId,
     );
