@@ -113,7 +113,8 @@ describe('AnonIdGuard (P2 — 쿠키 익명 식별자)', () => {
 
     expect(upsert).toHaveBeenCalledWith({
       where: { anonId: 'existing-anon-id' },
-      update: {},
+      // 빈 {}로 되돌아가면 lastSeen이 영영 안 움직인다(가드 주석 참고)
+      update: { lastSeen: expect.any(Date) as Date },
       create: { anonId: 'existing-anon-id' },
     });
   });

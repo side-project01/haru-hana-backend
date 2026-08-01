@@ -74,7 +74,7 @@ export class AnonIdGuard implements CanActivate {
     try {
       await this.prisma.user.upsert({
         where: { anonId },
-        update: {}, // @updatedAt이 lastSeen을 자동 갱신
+        update: { lastSeen: new Date() }, // 빈 {}면 UPDATE가 안 나가 @updatedAt이 안 돈다
         create: { anonId },
       });
     } catch {
