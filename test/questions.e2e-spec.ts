@@ -36,7 +36,6 @@ describe('GET /questions/today (e2e)', () => {
     app = await createTestApp({
       question: { findFirst: questionFindFirst },
       answer: { findUnique: answerFindUnique },
-      user: { upsert: jest.fn().mockResolvedValue(undefined) },
     });
   });
 

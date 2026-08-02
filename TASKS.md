@@ -19,7 +19,7 @@
 | 질문 등록 | **시드 스크립트**(`prisma/seed.ts`)로 20개 일괄 주입. 어드민 API는 차기 |
 | 초기 답변 풀 부족 (리스크) | 시드에 **예시 타인 답변**도 주입해 초기 P5 0건 방지 |
 | 익명 식별자 (P2) | **쿠키 기반** (httpOnly·secure·서명) |
-| 리텐션 지표 (KPI) | `User(익명)` 테이블 추가 — anonId·firstSeen·lastSeen. 집계 API는 차기 |
+| 리텐션 지표 (KPI) | **GA4가 맡는다.** `User(익명)` 테이블은 폐기(drop-user). 진입마다 upsert하던 탓에 부팅 시 고아 행이 쌓였고 요청당 DB 왕복도 1건 더 들었다. 광고 차단기에 막히는 만큼 실제보다 낮게 잡히는 것은 감수한다 |
 | 타임존 (P7) | **KST 자정 고정** |
 
 ## 작업 범위
@@ -33,11 +33,7 @@
 ## 데이터 모델 (prisma/schema.prisma)
 
 ```prisma
-model User {                          // 익명 사용자 (리텐션 지표용, PRD 7장)
-  anonId    String   @id             // 쿠키 익명 식별자 (P2)
-  firstSeen DateTime @default(now()) // 최초 진입일
-  lastSeen  DateTime @updatedAt      // 마지막 활동일 (D1/D7 산정 기반)
-}
+// User 모델은 폐기됐다(drop-user 마이그레이션). 리텐션은 GA4가 맡는다 — 아래 의사결정 표 참고.
 
 model Question {
   id          Int      @id @default(autoincrement())

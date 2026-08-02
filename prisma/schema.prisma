@@ -25,12 +25,9 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// 익명 사용자 (리텐션 지표용, PRD 7장)
-model User {
-  anonId    String   @id // 쿠키 익명 식별자 (P2)
-  firstSeen DateTime @default(now()) // 최초 진입일
-  lastSeen  DateTime @updatedAt // 마지막 활동일 (D1/D7 산정 기반)
-}
+// 익명 사용자(User) 모델은 제거됐다. 리텐션 지표(D1/D7, PRD 7장)는 GA4가 맡는다.
+// 진입마다 upsert하던 탓에 부팅 시 고아 행이 쌓였고, 요청당 DB 왕복도 1건 더 들었다.
+// anonId는 쿠키가 단일 진실이며 Answer·OtherAnswerPick이 문자열로 참조한다(FK 아님).
 
 // 오늘의 질문 (P3: 1일 1질문)
 model Question {

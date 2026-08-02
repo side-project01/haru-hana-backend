@@ -3,7 +3,6 @@ import type { NextFunction, Response } from 'express';
 import type { EnvConfig } from '../../config/env.validation';
 import { AnonIdMiddleware } from './anon-id.middleware';
 import { AnonIdService } from './anon-id.service';
-import { PrismaService } from '../prisma/prisma.service';
 import { ANON_ID_COOKIE, RequestWithAnonId } from './anon-id.constants';
 
 describe('AnonIdMiddleware (P2 — 쿠키 익명 식별자)', () => {
@@ -15,7 +14,6 @@ describe('AnonIdMiddleware (P2 — 쿠키 익명 식별자)', () => {
   let generate: jest.Mock;
   let sign: jest.Mock;
   let verify: jest.Mock;
-  let upsert: jest.Mock;
   let response: { cookie: jest.Mock };
   let next: NextFunction;
 
@@ -25,8 +23,8 @@ describe('AnonIdMiddleware (P2 — 쿠키 익명 식별자)', () => {
   }
 
   /** 미들웨어를 실행한다(더블을 실제 시그니처에 맞춰 넘긴다). */
-  function run(request: RequestWithAnonId): Promise<void> {
-    return middleware.use(request, response as unknown as Response, next);
+  function run(request: RequestWithAnonId): void {
+    middleware.use(request, response as unknown as Response, next);
   }
 
   beforeEach(() => {
@@ -34,20 +32,18 @@ describe('AnonIdMiddleware (P2 — 쿠키 익명 식별자)', () => {
     generate = jest.fn().mockReturnValue(GENERATED_ID);
     sign = jest.fn().mockReturnValue(SIGNED_VALUE);
     verify = jest.fn().mockReturnValue(null);
-    upsert = jest.fn().mockResolvedValue(undefined);
     response = { cookie: jest.fn() };
     next = jest.fn();
     middleware = new AnonIdMiddleware(
       { get: configGet } as unknown as ConfigService<EnvConfig, true>,
       { generate, sign, verify } as unknown as AnonIdService,
-      { user: { upsert } } as unknown as PrismaService,
     );
   });
 
-  it('쿠키가 없으면 새 anonId를 발급하고 서명 쿠키를 심는다', async () => {
+  it('쿠키가 없으면 새 anonId를 발급하고 서명 쿠키를 심는다', () => {
     const request = makeRequest();
 
-    await run(request);
+    run(request);
 
     expect(generate).toHaveBeenCalledTimes(1);
     expect(request.anonId).toBe(GENERATED_ID);
@@ -59,11 +55,11 @@ describe('AnonIdMiddleware (P2 — 쿠키 익명 식별자)', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it('유효한 서명 쿠키가 있으면 재사용하고 새 쿠키를 심지 않는다', async () => {
+  it('유효한 서명 쿠키가 있으면 재사용하고 새 쿠키를 심지 않는다', () => {
     verify.mockReturnValue('existing-anon-id');
     const request = makeRequest(`${ANON_ID_COOKIE}=existing-anon-id.sig`);
 
-    await run(request);
+    run(request);
 
     expect(verify).toHaveBeenCalledWith('existing-anon-id.sig');
     expect(request.anonId).toBe('existing-anon-id');
@@ -72,75 +68,27 @@ describe('AnonIdMiddleware (P2 — 쿠키 익명 식별자)', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it('서명이 변조돼 검증에 실패하면 새 anonId를 발급한다', async () => {
+  it('서명이 변조돼 검증에 실패하면 새 anonId를 발급한다', () => {
     verify.mockReturnValue(null); // 변조 → 검증 실패
     const request = makeRequest(`${ANON_ID_COOKIE}=tampered.value`);
 
-    await run(request);
+    run(request);
 
     expect(generate).toHaveBeenCalledTimes(1);
     expect(request.anonId).toBe(GENERATED_ID);
     expect(response.cookie).toHaveBeenCalled();
   });
 
-  it('운영 환경에서는 secure 쿠키로 발급한다', async () => {
+  it('운영 환경에서는 secure 쿠키로 발급한다', () => {
     configGet.mockReturnValue('production');
 
-    await run(makeRequest());
+    run(makeRequest());
 
     expect(response.cookie).toHaveBeenCalledWith(
       ANON_ID_COOKIE,
       SIGNED_VALUE,
       expect.objectContaining({ secure: true }),
     );
-  });
-
-  describe('적재는 확인된 신원만', () => {
-    it('쿠키를 들고 온 요청은 확인된 신원이라 User를 upsert한다', async () => {
-      verify.mockReturnValue('existing-anon-id');
-      const request = makeRequest(`${ANON_ID_COOKIE}=existing-anon-id.sig`);
-
-      await run(request);
-
-      expect(request.anonIdConfirmed).toBe(true);
-      expect(upsert).toHaveBeenCalledWith({
-        where: { anonId: 'existing-anon-id' },
-        // 빈 {}로 되돌아가면 lastSeen이 영영 안 움직인다(미들웨어 주석 참고)
-        update: { lastSeen: expect.any(Date) as Date },
-        create: { anonId: 'existing-anon-id' },
-      });
-    });
-
-    it('갓 발급한 anonId는 미확인이라 DB에 쓰지 않는다', async () => {
-      const request = makeRequest();
-
-      await run(request);
-
-      expect(request.anonIdConfirmed).toBe(false);
-      expect(upsert).not.toHaveBeenCalled();
-    });
-
-    it('쿠키 없는 요청이 동시에 여러 개 와도 User 행이 생기지 않는다', async () => {
-      // 부팅 시 /questions/today 와 /answers/me 가 쿠키 없이 병렬로 나가던 상황.
-      // 예전에는 요청마다 다른 anonId로 upsert가 돌아 고아 행이 남았다.
-      generate
-        .mockReturnValueOnce('anon-from-request-1')
-        .mockReturnValueOnce('anon-from-request-2');
-
-      await Promise.all([run(makeRequest()), run(makeRequest())]);
-
-      expect(upsert).not.toHaveBeenCalled();
-    });
-  });
-
-  it('lastSeen 갱신(upsert)이 실패해도 요청을 막지 않는다', async () => {
-    verify.mockReturnValue('existing-anon-id');
-    upsert.mockRejectedValue(new Error('db down'));
-    const request = makeRequest(`${ANON_ID_COOKIE}=existing-anon-id.sig`);
-
-    await run(request);
-
-    expect(next).toHaveBeenCalledTimes(1);
   });
 });
 
