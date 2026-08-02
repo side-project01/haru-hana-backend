@@ -60,21 +60,21 @@ model Answer {
 }
 ```
 
-> `User.lastSeen`은 진입(`GET /questions/today`)·제출(`POST /answers`) 시 upsert로 갱신.
+> 리텐션 지표는 GA4가 맡는다(`User` 테이블 폐기). 신원 발급은 DB를 건드리지 않는다.
 > 시드 답변의 `anonId`는 본인 제외(P5)에 안 걸리게 일반 사용자와 구분되는 값 사용.
 
 ## API 설계
 
 | 메서드 | 경로 | 책임 | 정책 |
 |---|---|---|---|
-| GET | `/questions/today` | 오늘 질문 1건 + 본인 당일 답변 여부 + serviceDate | P3, P1 |
+| GET | `/questions/today` | 오늘 질문 1건 + serviceDate | P3 |
 | GET | `/answers/me` | 본인의 오늘 답변(본문+배경) — 카드 다시보기 재진입용 | P1, 5.2/5.3 |
 | POST | `/answers` | 답변 제출(금칙어 검사→저장), 쿠키 anonId 발급/검증 | P1, P4, P6 |
 | GET | `/answers/others?questionId=` | 타인 답변 무작위 1건(본인 제외, 누적) | P5 |
 
 - 응답 DTO는 엔티티와 분리, `@nestjs/swagger`로 문서화.
-- `GET /questions/today` → `{ question|null, answeredToday, serviceDate }`. `serviceDate`는 새 질문 토스트의 서버 날짜 동기화(6장)에 사용.
-- `GET /answers/me` → 당일 미답변이면 `null`/204.
+- `GET /questions/today` → `{ question|null, serviceDate }`. `serviceDate`는 새 질문 토스트의 서버 날짜 동기화(6장)에 사용. **"오늘 답변했는지"는 담지 않는다** — 단일 진실은 `/answers/me`다.
+- `GET /answers/me` → 당일 미답변이면 `{ answer: null }`(최상위 `null`은 본문 없는 200이 된다).
 - **프라이버시(8장)**: `/answers/others` 응답 DTO는 `content`·배경만 반환하고 `anonId`·`createdAt` 등 작성자 식별 정보는 반드시 제외.
 
 ---

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "데일리 카드 API",
-    "description": "매일 질문 1개에 답하고 감성 카드를 만드는 익명 서비스 백엔드.\n\n- 인증: 로그인 없음. 서버가 `AnonIdGuard`로 익명 식별자 서명 쿠키를 발급/검증한다(P2).\n- Postman은 응답의 Set-Cookie를 쿠키 자로 자동 저장하고 이후 요청에 자동 첨부하므로, 첫 요청 후 동일 익명 ID로 유지된다.\n- `baseUrl` 컬렉션 변수로 로컬/배포 환경을 전환한다.",
+    "description": "매일 질문 1개에 답하고 감성 카드를 만드는 익명 서비스 백엔드.\n\n- 인증: 로그인 없음. 서버가 `AnonIdMiddleware`로 전 경로에서 익명 식별자 서명 쿠키를 발급/검증한다(P2).\n- Postman은 응답의 Set-Cookie를 쿠키 자로 자동 저장하고 이후 요청에 자동 첨부하므로, 첫 요청 후 동일 익명 ID로 유지된다.\n- `baseUrl` 컬렉션 변수로 로컬/배포 환경을 전환한다.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

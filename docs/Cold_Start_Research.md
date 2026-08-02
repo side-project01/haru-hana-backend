@@ -151,7 +151,7 @@ const moduleRef = await this.lazyModuleLoader.load(() => CacheModule);
 
 ### 2-4. standalone (`createApplicationContext`)
 
-가장 빠르지만(31.9ms) **가드·인터셉터·파이프가 동작하지 않는다.** 우리는 `AnonIdGuard`·`ValidationPipe`를
+가장 빠르지만(31.9ms) **미들웨어·가드·인터셉터·파이프가 동작하지 않는다.** 우리는 `AnonIdMiddleware`·`ValidationPipe`를
 쓰므로 **적용 대상이 아니다.**
 
 ---
