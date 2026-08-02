@@ -53,7 +53,15 @@ export function readAnonIdCookie(
   return undefined;
 }
 
-/** anonId가 주입된 요청 객체 타입 — 가드가 채우고 데코레이터가 읽는다. */
+/** anonId가 주입된 요청 객체 타입 — 미들웨어가 채우고 데코레이터가 읽는다. */
 export interface RequestWithAnonId extends Request {
   anonId?: string;
+  /**
+   * 이 anonId가 **요청 쿠키로 확인된** 것인지(true), 이번 응답에서 갓 발급한 것인지(false).
+   *
+   * 갓 발급한 ID는 브라우저가 보관할지 아직 모르는 **미확인 신원**이다. 부팅처럼 쿠키 없는
+   * 요청이 동시에 나가면 각자 다른 ID를 발급받고 브라우저는 하나만 남기므로, 미확인 상태로
+   * DB에 쓰면 버려진 ID가 고아 행으로 남는다. 그래서 적재는 이 값이 true일 때만 한다.
+   */
+  anonIdConfirmed?: boolean;
 }

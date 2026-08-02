@@ -5,7 +5,6 @@ import {
   ParseIntPipe,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -15,7 +14,6 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import { AnonIdGuard } from '../../common/identity/anon-id.guard';
 import { AnonId } from '../../common/identity/anon-id.decorator';
 import { AnswersService } from './answers.service';
 import { CreateAnswerDto } from './dto/create-answer.dto';
@@ -26,11 +24,11 @@ import { OtherAnswerResponseDto } from './dto/other-answer-response.dto';
 
 /**
  * 답변 컨트롤러 (P1·P5·P6). 라우팅·DTO 매핑만 담당한다(얇은 컨트롤러, CLAUDE.md 4장).
- * AnonIdGuard로 익명 식별자(P2)를 보장하고, 정책 위반 상태코드는 서비스 예외로 결정된다.
+ * 익명 식별자(P2)는 AnonIdMiddleware가 전 경로에 보장하고, 정책 위반 상태코드는
+ * 서비스 예외로 결정된다.
  */
 @ApiTags('answers')
 @Controller('answers')
-@UseGuards(AnonIdGuard)
 export class AnswersController {
   constructor(private readonly answersService: AnswersService) {}
 

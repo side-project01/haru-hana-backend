@@ -11,7 +11,7 @@ import type { EnvConfig } from '../../config/env.validation';
  * 서버리스(Vercel) 진입점이 동일하게 동작한다 — @vercel/node가 req.cookies를
  * 미리 채워 cookie-parser 서명이 깨지던 문제를 원천 제거(CLAUDE.md 11장).
  *
- * HTTP·쿠키 I/O(헤더 읽기, Set-Cookie)는 가드(AnonIdGuard)가 담당한다.
+ * HTTP·쿠키 I/O(헤더 읽기, Set-Cookie)는 AnonIdMiddleware가 담당한다.
  */
 @Injectable()
 export class AnonIdService {
