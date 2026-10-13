@@ -1,25 +1,15 @@
-import type { CookieOptions } from 'express';
-import type { Request } from 'express';
+import type { CookieOptions, Request } from 'express';
 
-/**
- * 익명 식별자(anonId) 쿠키 상수·옵션 (PRD P2, CLAUDE.md 6장).
- * 무로그인 서비스이므로 서명된 httpOnly 쿠키 하나로 사용자를 식별한다.
- */
+/** 익명 식별자(anonId) 쿠키 상수·옵션 (P2). */
 
-/** anonId를 담는 쿠키 이름 */
 export const ANON_ID_COOKIE = 'anon_id';
 
-/** 쿠키 유효기간 — 리텐션 식별 유지를 위해 길게(약 400일) */
-const ANON_ID_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 400;
+/** 미들웨어가 매 요청 다시 심으므로 "마지막 이용 + 365일"이다. */
+const ANON_ID_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
 
 /**
- * anonId 쿠키 옵션을 만든다.
- * - httpOnly: JS 접근 차단(탈취 방지)
- * - secure: 운영(prod)에서만 HTTPS 전용. 로컬 http 개발을 막지 않기 위해 분기.
- *
- * 변조 방지는 cookie-parser의 `signed` 대신 AnonIdService의 HMAC 서명으로 처리한다
- * (진입점 무관 동작 보장, CLAUDE.md 11장). 따라서 여기서 signed 옵션은 쓰지 않는다.
- * @param isProduction NODE_ENV === 'production' 여부
+ * anonId 쿠키 옵션. secure는 로컬 http 개발을 위해 운영에서만 켠다.
+ * 변조 방지는 `signed` 옵션이 아니라 AnonIdService의 HMAC 서명이 맡는다(CLAUDE.md 11장).
  */
 export function buildAnonIdCookieOptions(isProduction: boolean): CookieOptions {
   return {
@@ -31,11 +21,7 @@ export function buildAnonIdCookieOptions(isProduction: boolean): CookieOptions {
   };
 }
 
-/**
- * 요청 Cookie 헤더에서 anonId 쿠키의 원본(서명된) 값을 읽는다.
- * cookie-parser에 의존하지 않고 헤더를 직접 파싱하므로 로컬/서버리스에서 동일하게 동작한다.
- * 없으면 undefined.
- */
+/** Cookie 헤더에서 anonId 쿠키의 서명된 원본 값을 읽는다. 없으면 undefined. */
 export function readAnonIdCookie(
   cookieHeader: string | undefined,
 ): string | undefined {

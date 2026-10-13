@@ -55,16 +55,21 @@ describe('AnonIdMiddleware (P2 — 쿠키 익명 식별자)', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it('유효한 서명 쿠키가 있으면 재사용하고 새 쿠키를 심지 않는다', () => {
+  it('유효한 서명 쿠키가 있으면 같은 anonId로 쿠키를 다시 심어 만료를 연장한다', () => {
     verify.mockReturnValue('existing-anon-id');
     const request = makeRequest(`${ANON_ID_COOKIE}=existing-anon-id.sig`);
 
     run(request);
 
     expect(verify).toHaveBeenCalledWith('existing-anon-id.sig');
-    expect(request.anonId).toBe('existing-anon-id');
     expect(generate).not.toHaveBeenCalled();
-    expect(response.cookie).not.toHaveBeenCalled();
+    expect(request.anonId).toBe('existing-anon-id');
+    expect(sign).toHaveBeenCalledWith('existing-anon-id');
+    expect(response.cookie).toHaveBeenCalledWith(
+      ANON_ID_COOKIE,
+      SIGNED_VALUE,
+      expect.objectContaining({ httpOnly: true }),
+    );
     expect(next).toHaveBeenCalledTimes(1);
   });
 
