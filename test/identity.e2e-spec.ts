@@ -58,13 +58,16 @@ describe('익명 식별자 미들웨어 (e2e)', () => {
     },
   );
 
-  it('발급한 쿠키를 되돌려주면 재사용하고 다시 심지 않는다', async () => {
+  it('발급한 쿠키를 되돌려주면 같은 값으로 다시 심어 만료를 연장한다', async () => {
+    const cookie = signedCookie('round-trip-anon-id');
     const res = await request(app.getHttpServer())
       .get('/questions/today')
-      .set('Cookie', signedCookie('round-trip-anon-id'))
+      .set('Cookie', cookie)
       .expect(200);
 
-    expect(res.headers['set-cookie']).toBeUndefined();
+    const setCookie = String(res.headers['set-cookie'] ?? '');
+    expect(setCookie).toContain(cookie);
+    expect(setCookie).toContain('Max-Age=31536000');
   });
 
   it('서명이 변조된 쿠키는 버리고 새로 발급한다', async () => {

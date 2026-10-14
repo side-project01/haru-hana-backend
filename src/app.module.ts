@@ -6,6 +6,7 @@ import { AnonIdModule } from './common/identity/anon-id.module';
 import { AnonIdMiddleware } from './common/identity/anon-id.middleware';
 import { QuestionsModule } from './modules/questions/questions.module';
 import { AnswersModule } from './modules/answers/answers.module';
+import { CronModule } from './modules/cron/cron.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AnswersModule } from './modules/answers/answers.module';
     AnonIdModule,
     QuestionsModule,
     AnswersModule,
+    CronModule,
   ],
 })
 export class AppModule implements NestModule {

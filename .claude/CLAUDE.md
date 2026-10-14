@@ -197,8 +197,8 @@ src/common/
 - 콜드스타트와 혼동하지 말 것. 연속 호출이 **전부** 느리면 콜드스타트가 아니라 요청당 비용이다.
 
 **설정 파일**
-- `vercel.json`: `buildCommand`에 `prisma generate` 포함(node_modules 캐시로 인한 stale 클라이언트 방지), `regions`로 함수 리전 고정(위 참조), 전 요청을 `/api`로 rewrite.
-- 환경변수(`DATABASE_URL`·`COOKIE_SECRET`·`CORS_ORIGINS`·`NODE_ENV`)는 Vercel 대시보드에 등록. `env.validation.ts`가 fail-fast라 누락 시 콜드스타트에서 즉시 실패한다.
+- `vercel.json`: `buildCommand`에 `prisma generate` 포함(node_modules 캐시로 인한 stale 클라이언트 방지), `regions`로 함수 리전 고정(위 참조), `crons`로 매일 03:00 KST(`0 18 * * *` UTC)에 `/cron/purge-answers` 호출(마지막 답변 후 365일 지난 사용자의 답변 삭제), 전 요청을 `/api`로 rewrite.
+- 환경변수(`DATABASE_URL`·`COOKIE_SECRET`·`CRON_SECRET`·`CORS_ORIGINS`·`NODE_ENV`)는 Vercel 대시보드에 등록. `env.validation.ts`가 fail-fast라 누락 시 콜드스타트에서 즉시 실패한다.
 
 **날짜(P7) 주의**
 - Vercel 함수는 UTC로 실행된다. `service-date.util`은 로컬 타임존 게터를 쓰지 않고 UTC epoch + 고정 KST 오프셋으로 계산하므로 안전 — 이 불변식을 깨지 않는다(로컬 `getHours`/`getFullYear` 등 사용 금지, `getUTC*`·`Date.UTC`만).

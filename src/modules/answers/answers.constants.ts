@@ -11,3 +11,9 @@ export type BgType = (typeof BG_TYPES)[number];
 
 /** 카드 배경 값 최대 길이 (색상 코드·그라디언트·이미지 키 등) */
 export const MAX_BG_VALUE_LENGTH = 200;
+
+/**
+ * 서버 답변 보유 기간. 사용자의 마지막 답변일로부터 이 기간이 지나면 그 사용자의 답변을 모두 삭제한다.
+ * anon_id 쿠키 수명(마지막 이용 + 365일)과 맞춘 값 — 그 뒤에는 어차피 본인이 접근할 수 없다.
+ */
+export const ANSWER_RETENTION_DAYS = 365;

@@ -17,6 +17,9 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
   let pickCreate: jest.Mock;
   let contains: jest.Mock;
   let findTodayQuestion: jest.Mock;
+  let groupBy: jest.Mock;
+  let deleteMany: jest.Mock;
+  let pickDeleteMany: jest.Mock;
 
   const dto: CreateAnswerDto = {
     questionId: 1,
@@ -35,10 +38,17 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
     contains = jest.fn().mockReturnValue(false);
     // 기본: 오늘 질문이 dto.questionId와 일치(정상 경로)
     findTodayQuestion = jest.fn().mockResolvedValue({ id: dto.questionId });
+    groupBy = jest.fn();
+    deleteMany = jest.fn();
+    pickDeleteMany = jest.fn();
 
     const prisma = {
-      answer: { create, findUnique, count, findFirst },
-      otherAnswerPick: { findUnique: pickFindUnique, create: pickCreate },
+      answer: { create, findUnique, count, findFirst, groupBy, deleteMany },
+      otherAnswerPick: {
+        findUnique: pickFindUnique,
+        create: pickCreate,
+        deleteMany: pickDeleteMany,
+      },
     } as unknown as PrismaService;
     const profanity = { contains } as unknown as ProfanityService;
     const questions = { findTodayQuestion } as unknown as QuestionsService;
@@ -241,6 +251,44 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
       await expect(service.getOrAssignOtherAnswer(1, 'anon-1')).rejects.toBe(
         boom,
       );
+    });
+
+    it('오늘의 질문이 아니면 BadRequest(400) — 지난 질문으로 과거 답변 조회 차단', async () => {
+      findTodayQuestion.mockResolvedValue({ id: 2 });
+
+      await expect(
+        service.getOrAssignOtherAnswer(1, 'anon-1'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(pickFindUnique).not.toHaveBeenCalled();
+      expect(count).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('purgeInactive — 보유 기간 경과 삭제', () => {
+    const now = new Date('2026-10-14T00:00:00.000Z');
+    const cutoff = new Date('2025-10-14T00:00:00.000Z');
+
+    it('마지막 답변이 365일보다 오래된 사용자의 답변과 365일 지난 배정을 지운다', async () => {
+      groupBy.mockResolvedValue([{ anonId: 'old-1' }, { anonId: 'old-2' }]);
+      deleteMany.mockResolvedValue({ count: 5 });
+      pickDeleteMany.mockResolvedValue({ count: 2 });
+
+      const result = await service.purgeInactive(now);
+
+      expect(groupBy).toHaveBeenCalledWith({
+        by: ['anonId'],
+        having: { createdAt: { _max: { lt: cutoff } } },
+      });
+      expect(deleteMany).toHaveBeenCalledWith({
+        where: {
+          anonId: { in: ['old-1', 'old-2'] },
+          createdAt: { lt: cutoff },
+        },
+      });
+      expect(pickDeleteMany).toHaveBeenCalledWith({
+        where: { createdAt: { lt: cutoff } },
+      });
+      expect(result).toEqual({ answers: 5, picks: 2 });
     });
   });
 });

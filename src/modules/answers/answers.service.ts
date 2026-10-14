@@ -10,6 +10,9 @@ import { ProfanityService } from '../../common/moderation/profanity.service';
 import { QuestionsService } from '../questions/questions.service';
 import { getServiceDate } from '../../common/date/service-date.util';
 import { CreateAnswerDto } from './dto/create-answer.dto';
+import { ANSWER_RETENTION_DAYS } from './answers.constants';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * 답변 도메인 서비스 (P1 하루1회 · P5 타인답변 · P6 금칙어).
@@ -108,13 +111,22 @@ export class AnswersService {
    * 타인 답변이 0건이면 배정을 남기지 않고 null을 반환한다. 그래야 나중에 답변이 쌓인 뒤
    * 다시 들어왔을 때 정상적으로 추첨된다(그날 첫 답변자 대응).
    *
-   * @param questionId 대상 질문(배정 단위). 질문은 하루 1개이므로 사실상 하루 1건(P3)
+   * 오늘의 질문만 받는다. 지난 질문 ID로 보관 중인 과거 답변을 꺼내 볼 수 없게 하기 위해서다.
+   *
+   * @param questionId 대상 질문(배정 단위). 오늘의 질문이 아니면 400
    * @param anonId 본인 식별자(추첨 제외 대상이자 배정 주체)
+   * @param now 기준 시각(기본값: 현재).
    */
   async getOrAssignOtherAnswer(
     questionId: number,
     anonId: string,
+    now: Date = new Date(),
   ): Promise<Answer | null> {
+    const todayQuestion = await this.questions.findTodayQuestion(now);
+    if (!todayQuestion || todayQuestion.id !== questionId) {
+      throw new BadRequestException('오늘의 질문만 조회할 수 있어요.');
+    }
+
     const assigned = await this.findAssignedOtherAnswer(questionId, anonId);
     if (assigned) return assigned;
 
@@ -138,6 +150,37 @@ export class AnswersService {
       }
       throw error;
     }
+  }
+
+  /**
+   * 보유 기간(ANSWER_RETENTION_DAYS)이 지난 데이터를 삭제한다.
+   * - 답변: 마지막 답변일이 기간을 넘긴 사용자의 답변 전부. 지워진 답변을 가리키던 배정은 FK CASCADE로 함께 지워진다.
+   * - 배정: 당일에만 쓰이므로 주인과 무관하게 기간을 넘긴 것은 모두.
+   * @returns 삭제한 답변·배정 건수
+   */
+  async purgeInactive(
+    now: Date = new Date(),
+  ): Promise<{ answers: number; picks: number }> {
+    const cutoff = new Date(now.getTime() - ANSWER_RETENTION_DAYS * DAY_MS);
+
+    const inactive = await this.prisma.answer.groupBy({
+      by: ['anonId'],
+      having: { createdAt: { _max: { lt: cutoff } } },
+    });
+    const { count: answers } = await this.prisma.answer.deleteMany({
+      where: {
+        anonId: { in: inactive.map(({ anonId }) => anonId) },
+        createdAt: { lt: cutoff }, // 조회와 삭제 사이에 쓴 새 답변은 지우지 않는다
+      },
+    });
+    const { count: picks } = await this.prisma.otherAnswerPick.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+
+    this.logger.log(
+      `보유 기간 경과 데이터 삭제: 답변 ${answers}건, 배정 ${picks}건`,
+    );
+    return { answers, picks };
   }
 
   /** 이미 배정된 타인 답변을 조회한다. 없으면 null. */

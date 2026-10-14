@@ -14,5 +14,6 @@ import { QuestionsModule } from '../questions/questions.module';
   imports: [ProfanityModule, QuestionsModule],
   controllers: [AnswersController],
   providers: [AnswersService],
+  exports: [AnswersService],
 })
 export class AnswersModule {}

@@ -13,20 +13,10 @@ import { PrismaService } from '../../src/common/prisma/prisma.service';
  * DB는 붙지 않는다 — `PrismaService`를 더블로 교체한다.
  */
 
-/** ConfigModule(fail-fast)이 통과하도록 최소 환경변수를 채운다. 실제 접속은 없다. */
-function setTestEnv(): void {
-  process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/test';
-  process.env.DIRECT_URL = 'postgresql://user:pass@localhost:5432/test';
-  process.env.COOKIE_SECRET = 'e2e-cookie-secret';
-  process.env.CORS_ORIGINS = 'http://localhost:5173';
-}
-
 /** PrismaService 더블을 주입해 앱을 띄운다. */
 export async function createTestApp(
   prismaDouble: unknown,
 ): Promise<INestApplication<App>> {
-  setTestEnv();
-
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PrismaService)
     .useValue(prismaDouble)

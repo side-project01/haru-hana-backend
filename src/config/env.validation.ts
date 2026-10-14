@@ -21,6 +21,9 @@ export const envSchema = z.object({
   /** 익명 식별자 쿠키 서명 시크릿 (P2). 빈 값 금지. */
   COOKIE_SECRET: z.string().min(1, 'COOKIE_SECRET는 비어 있을 수 없습니다'),
 
+  /** Vercel Cron 호출 인증 시크릿. Vercel이 `Authorization: Bearer <값>`으로 보낸다. */
+  CRON_SECRET: z.string().min(1, 'CRON_SECRET는 비어 있을 수 없습니다'),
+
   /** CORS 허용 오리진(콤마 구분) → 문자열 배열로 변환 */
   CORS_ORIGINS: z
     .string()
