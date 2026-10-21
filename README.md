@@ -154,6 +154,18 @@ flowchart LR
 
 ---
 
+### 5. 내 기록 — 월별 조회 (`modules/answers`)
+
+`GET /answers/me/history?month=YYYY-MM`은 그 달(KST 달력, P7)의 본인 답변을 날짜 오름차순으로 내려준다. 앱의 "내 기록" 화면이 달 단위로 불러가 기기에 저장해 두고, 이미 받은 달은 다시 부르지 않는다.
+
+```json
+{ "answers": [{ "serviceDate": "2026-10-21", "question": "오늘 하루 중…", "content": "…", "bgType": "color", "bgValue": "#FFE8D6" }] }
+```
+
+- 지난 질문은 앱이 알 방법이 없으므로 질문 본문을 함께 담는다. `serviceDate`는 KST 날짜 라벨(`formatServiceDate`)이다.
+- 달 범위는 `getServiceMonthRange`(serviceDate `start` 이상 `end` 미만)로 계산한다. 날짜 계산을 유틸 밖에 두지 않는다.
+- 그 달에 답변이 없으면 `{ "answers": [] }`. `month` 형식이 틀리면 400.
+
 ## 데이터 모델 (`prisma/schema.prisma`)
 
 | 모델 | 용도 | 핵심 필드 |

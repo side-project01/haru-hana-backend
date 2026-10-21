@@ -40,3 +40,20 @@ export function formatServiceDate(serviceDate: Date): string {
     .toISOString()
     .slice(0, 10);
 }
+
+/**
+ * KST 달력 기준 한 달(`year`년 `month`월)에 속하는 serviceDate 범위를 반환한다.
+ * `start` 이상 `end` 미만이 그 달이다(`end`는 다음 달 1일의 serviceDate).
+ * 예) 2026년 10월 → start `UTC 2026-09-30 15:00`, end `UTC 2026-10-31 15:00`
+ * @param year 연도 (예: 2026)
+ * @param month 월 (1~12)
+ */
+export function getServiceMonthRange(
+  year: number,
+  month: number,
+): { start: Date; end: Date } {
+  return {
+    start: new Date(Date.UTC(year, month - 1, 1) - KST_OFFSET_MS),
+    end: new Date(Date.UTC(year, month, 1) - KST_OFFSET_MS),
+  };
+}

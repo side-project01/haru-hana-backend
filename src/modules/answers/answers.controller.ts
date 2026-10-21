@@ -15,10 +15,14 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { UserId } from '../../common/auth/user-id.decorator';
+import { formatServiceDate } from '../../common/date/service-date.util';
 import { AnswersService } from './answers.service';
 import { CreateAnswerDto } from './dto/create-answer.dto';
+import { FindMyAnswersQueryDto } from './dto/find-my-answers-query.dto';
 import { MyAnswerDto } from './dto/my-answer.dto';
 import { MyAnswerResponseDto } from './dto/my-answer-response.dto';
+import { MyHistoryAnswerDto } from './dto/my-history-answer.dto';
+import { MyHistoryResponseDto } from './dto/my-history-response.dto';
 import { OtherAnswerDto } from './dto/other-answer.dto';
 import { OtherAnswerResponseDto } from './dto/other-answer-response.dto';
 
@@ -52,6 +56,32 @@ export class AnswersController {
     const answer = await this.answersService.findMyAnswerToday(userId);
     // 없음도 항상 파싱 가능한 JSON으로 — 최상위 null은 본문 없는 200이 된다(응답 DTO 주석 참고).
     return { answer: answer ? this.toMyAnswer(answer) : null };
+  }
+
+  @Get('me/history')
+  @ApiOperation({
+    summary: '내 기록: 한 달(KST) 동안의 본인 답변 (날짜 오름차순)',
+  })
+  @ApiOkResponse({ type: MyHistoryResponseDto })
+  async findMyHistory(
+    @UserId() userId: string,
+    @Query() query: FindMyAnswersQueryDto,
+  ): Promise<MyHistoryResponseDto> {
+    const [year, month] = query.month.split('-').map(Number);
+    const answers = await this.answersService.findMyAnswersInMonth(
+      userId,
+      year,
+      month,
+    );
+    return {
+      answers: answers.map((answer) => ({
+        serviceDate: formatServiceDate(answer.serviceDate),
+        question: answer.question.body,
+        content: answer.content,
+        bgType: answer.bgType as MyHistoryAnswerDto['bgType'],
+        bgValue: answer.bgValue,
+      })),
+    };
   }
 
   @Get('others')

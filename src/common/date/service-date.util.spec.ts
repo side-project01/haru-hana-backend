@@ -1,4 +1,8 @@
-import { formatServiceDate, getServiceDate } from './service-date.util';
+import {
+  formatServiceDate,
+  getServiceDate,
+  getServiceMonthRange,
+} from './service-date.util';
 
 describe('getServiceDate (P7 — KST 자정 기준)', () => {
   it('KST 정오는 같은 날짜의 KST 자정(UTC 전날 15:00)으로 매핑된다', () => {
@@ -67,5 +71,32 @@ describe('formatServiceDate (KST 날짜 라벨)', () => {
     // KST 2026-06-19 12:00 == UTC 2026-06-19 03:00
     const now = new Date('2026-06-19T03:00:00.000Z');
     expect(formatServiceDate(getServiceDate(now))).toBe('2026-06-19');
+  });
+});
+
+describe('getServiceMonthRange (KST 달력 한 달)', () => {
+  it('그 달 1일과 다음 달 1일의 serviceDate를 반환한다', () => {
+    expect(getServiceMonthRange(2026, 10)).toEqual({
+      start: new Date('2026-09-30T15:00:00.000Z'),
+      end: new Date('2026-10-31T15:00:00.000Z'),
+    });
+  });
+
+  it('12월은 다음 해 1월 1일에서 끝난다', () => {
+    expect(getServiceMonthRange(2026, 12).end).toEqual(
+      new Date('2026-12-31T15:00:00.000Z'),
+    );
+  });
+
+  it('그 달 첫날·마지막 날의 serviceDate는 범위 안, 다음 달 첫날은 범위 밖이다', () => {
+    const { start, end } = getServiceMonthRange(2026, 10);
+    // KST 2026-10-01 00:00 / 2026-10-31 23:59:59 / 2026-11-01 00:00
+    const first = getServiceDate(new Date('2026-09-30T15:00:00.000Z'));
+    const last = getServiceDate(new Date('2026-10-31T14:59:59.000Z'));
+    const next = getServiceDate(new Date('2026-10-31T15:00:00.000Z'));
+
+    expect(first >= start && first < end).toBe(true);
+    expect(last >= start && last < end).toBe(true);
+    expect(next < end).toBe(false);
   });
 });

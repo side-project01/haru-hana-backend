@@ -13,6 +13,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
   let findUnique: jest.Mock;
   let count: jest.Mock;
   let findFirst: jest.Mock;
+  let findMany: jest.Mock;
   let pickFindUnique: jest.Mock;
   let pickCreate: jest.Mock;
   let contains: jest.Mock;
@@ -33,6 +34,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
     findUnique = jest.fn();
     count = jest.fn();
     findFirst = jest.fn();
+    findMany = jest.fn();
     pickFindUnique = jest.fn();
     pickCreate = jest.fn();
     contains = jest.fn().mockReturnValue(false);
@@ -43,7 +45,15 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
     pickDeleteMany = jest.fn();
 
     const prisma = {
-      answer: { create, findUnique, count, findFirst, groupBy, deleteMany },
+      answer: {
+        create,
+        findUnique,
+        count,
+        findFirst,
+        findMany,
+        groupBy,
+        deleteMany,
+      },
       otherAnswerPick: {
         findUnique: pickFindUnique,
         create: pickCreate,
@@ -122,6 +132,28 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
       create.mockRejectedValue(other);
 
       await expect(service.create('user-1', dto)).rejects.toBe(other);
+    });
+  });
+
+  describe('findMyAnswersInMonth — 내 기록 월별 조회', () => {
+    it('KST 달력 한 달 범위의 본인 답변을 질문과 함께 날짜 오름차순으로 조회한다', async () => {
+      const mine = [{ id: 10, userId: 'user-1', question: { body: '질문' } }];
+      findMany.mockResolvedValue(mine);
+
+      const result = await service.findMyAnswersInMonth('user-1', 2026, 10);
+
+      expect(result).toBe(mine);
+      expect(findMany).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-1',
+          serviceDate: {
+            gte: new Date('2026-09-30T15:00:00.000Z'), // KST 2026-10-01 00:00
+            lt: new Date('2026-10-31T15:00:00.000Z'), // KST 2026-11-01 00:00
+          },
+        },
+        include: { question: true },
+        orderBy: { serviceDate: 'asc' },
+      });
     });
   });
 

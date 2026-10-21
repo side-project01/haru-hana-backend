@@ -13,6 +13,7 @@ describe('AnswersController — 응답 계약', () => {
   let controller: AnswersController;
   let create: jest.Mock;
   let findMyAnswerToday: jest.Mock;
+  let findMyAnswersInMonth: jest.Mock;
   let getOrAssignOtherAnswer: jest.Mock;
 
   /** 서비스가 돌려주는 Answer 엔티티(식별정보 포함 — 응답에 새어나가면 안 된다). */
@@ -44,11 +45,13 @@ describe('AnswersController — 응답 계약', () => {
   beforeEach(() => {
     create = jest.fn();
     findMyAnswerToday = jest.fn();
+    findMyAnswersInMonth = jest.fn();
     getOrAssignOtherAnswer = jest.fn();
 
     const service = {
       create,
       findMyAnswerToday,
+      findMyAnswersInMonth,
       getOrAssignOtherAnswer,
     } as unknown as AnswersService;
 
@@ -71,6 +74,37 @@ describe('AnswersController — 응답 계약', () => {
       await expect(controller.findMine('user-1')).resolves.toEqual({
         answer: null,
       });
+    });
+  });
+
+  describe('GET /answers/me/history', () => {
+    it('month를 연·월로 나눠 조회하고, 날짜는 KST 라벨·질문은 본문으로 바꿔 식별정보 없이 반환한다', async () => {
+      findMyAnswersInMonth.mockResolvedValue([
+        { ...saved, question: { id: 1, body: '오늘의 질문' } },
+      ]);
+
+      await expect(
+        controller.findMyHistory('user-1', { month: '2026-06' }),
+      ).resolves.toEqual({
+        answers: [
+          {
+            serviceDate: '2026-06-19', // UTC 2026-06-18 15:00 == KST 2026-06-19
+            question: '오늘의 질문',
+            content: saved.content,
+            bgType: 'color',
+            bgValue: '#FFE8D6',
+          },
+        ],
+      });
+      expect(findMyAnswersInMonth).toHaveBeenCalledWith('user-1', 2026, 6);
+    });
+
+    it('그 달에 답변이 없으면 { answers: [] }를 반환한다', async () => {
+      findMyAnswersInMonth.mockResolvedValue([]);
+
+      await expect(
+        controller.findMyHistory('user-1', { month: '2026-06' }),
+      ).resolves.toEqual({ answers: [] });
     });
   });
 

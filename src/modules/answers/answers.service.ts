@@ -4,11 +4,18 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { Prisma, type Answer } from '../../generated/prisma/client';
+import {
+  Prisma,
+  type Answer,
+  type Question,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ProfanityService } from '../../common/moderation/profanity.service';
 import { QuestionsService } from '../questions/questions.service';
-import { getServiceDate } from '../../common/date/service-date.util';
+import {
+  getServiceDate,
+  getServiceMonthRange,
+} from '../../common/date/service-date.util';
 import { CreateAnswerDto } from './dto/create-answer.dto';
 import { ANSWER_RETENTION_DAYS } from './answers.constants';
 
@@ -95,6 +102,27 @@ export class AnswersService {
 
     return this.prisma.answer.findUnique({
       where: { userId_serviceDate: { userId, serviceDate } },
+    });
+  }
+
+  /**
+   * KST 달력 기준 한 달 동안의 본인 답변을 날짜 오름차순으로 조회한다(내 기록 화면).
+   * 카드에 그날의 질문을 보여줘야 하므로 질문을 함께 불러온다.
+   * @param userId 로그인 사용자 ID (P2)
+   * @param year 연도
+   * @param month 월 (1~12)
+   */
+  findMyAnswersInMonth(
+    userId: string,
+    year: number,
+    month: number,
+  ): Promise<(Answer & { question: Question })[]> {
+    const { start, end } = getServiceMonthRange(year, month);
+
+    return this.prisma.answer.findMany({
+      where: { userId, serviceDate: { gte: start, lt: end } },
+      include: { question: true },
+      orderBy: { serviceDate: 'asc' },
     });
   }
 
