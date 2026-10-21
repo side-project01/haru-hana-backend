@@ -59,15 +59,15 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
   describe('create — 제출 (P1·P3·P6)', () => {
     it('오늘 질문에 대한 정상 제출이면 serviceDate와 함께 저장한다', async () => {
       const now = new Date('2026-06-19T03:00:00.000Z');
-      const saved = { id: 10, ...dto, anonId: 'anon-1' };
+      const saved = { id: 10, ...dto, userId: 'user-1' };
       create.mockResolvedValue(saved);
 
-      const result = await service.create('anon-1', dto, now);
+      const result = await service.create('user-1', dto, now);
 
       expect(result).toBe(saved);
       expect(create).toHaveBeenCalledWith({
         data: {
-          anonId: 'anon-1',
+          userId: 'user-1',
           questionId: dto.questionId,
           content: dto.content,
           bgType: dto.bgType,
@@ -80,7 +80,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
     it('오늘 질문이 없으면 BadRequest(400) — 존재하지 않는 제출 차단 (P3)', async () => {
       findTodayQuestion.mockResolvedValue(null);
 
-      await expect(service.create('anon-1', dto)).rejects.toBeInstanceOf(
+      await expect(service.create('user-1', dto)).rejects.toBeInstanceOf(
         BadRequestException,
       );
       expect(create).not.toHaveBeenCalled();
@@ -89,7 +89,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
     it('questionId가 오늘 질문과 다르면 BadRequest(400) — 임의 질문 제출 차단 (P1·P3)', async () => {
       findTodayQuestion.mockResolvedValue({ id: 999 }); // 오늘 질문은 999인데 dto는 1
 
-      await expect(service.create('anon-1', dto)).rejects.toBeInstanceOf(
+      await expect(service.create('user-1', dto)).rejects.toBeInstanceOf(
         BadRequestException,
       );
       expect(create).not.toHaveBeenCalled();
@@ -98,7 +98,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
     it('금칙어가 포함되면 BadRequest(400)로 차단하고 저장하지 않는다 (P6)', async () => {
       contains.mockReturnValue(true);
 
-      await expect(service.create('anon-1', dto)).rejects.toBeInstanceOf(
+      await expect(service.create('user-1', dto)).rejects.toBeInstanceOf(
         BadRequestException,
       );
       expect(create).not.toHaveBeenCalled();
@@ -112,7 +112,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
         }),
       );
 
-      await expect(service.create('anon-1', dto)).rejects.toBeInstanceOf(
+      await expect(service.create('user-1', dto)).rejects.toBeInstanceOf(
         ConflictException,
       );
     });
@@ -121,23 +121,23 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
       const other = new Error('db down');
       create.mockRejectedValue(other);
 
-      await expect(service.create('anon-1', dto)).rejects.toBe(other);
+      await expect(service.create('user-1', dto)).rejects.toBe(other);
     });
   });
 
   describe('findMyAnswerToday — 본인 답변 (5.2/5.3)', () => {
     it('오늘 본인 답변을 유니크 키로 조회한다', async () => {
       const now = new Date('2026-06-19T03:00:00.000Z');
-      const mine = { id: 10, anonId: 'anon-1' };
+      const mine = { id: 10, userId: 'user-1' };
       findUnique.mockResolvedValue(mine);
 
-      const result = await service.findMyAnswerToday('anon-1', now);
+      const result = await service.findMyAnswerToday('user-1', now);
 
       expect(result).toBe(mine);
       expect(findUnique).toHaveBeenCalledWith({
         where: {
-          anonId_serviceDate: {
-            anonId: 'anon-1',
+          userId_serviceDate: {
+            userId: 'user-1',
             serviceDate: getServiceDate(now),
           },
         },
@@ -147,14 +147,14 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
     it('당일 답변이 없으면 null을 반환한다', async () => {
       findUnique.mockResolvedValue(null);
 
-      const result = await service.findMyAnswerToday('anon-1');
+      const result = await service.findMyAnswerToday('user-1');
 
       expect(result).toBeNull();
     });
   });
 
   describe('getOrAssignOtherAnswer — 타인 답변 고정 배정 (P5)', () => {
-    const other = { id: 5, anonId: 'anon-2', content: '나도 예뻤어요.' };
+    const other = { id: 5, userId: 'user-2', content: '나도 예뻤어요.' };
 
     it('배정이 없으면 무작위 1건을 뽑고 그 결과를 배정으로 기록한다', async () => {
       pickFindUnique.mockResolvedValue(null);
@@ -162,18 +162,18 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
       findFirst.mockResolvedValue(other);
       const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.5); // skip = floor(0.5*3)=1
 
-      const result = await service.getOrAssignOtherAnswer(1, 'anon-1');
+      const result = await service.getOrAssignOtherAnswer(1, 'user-1');
 
       expect(result).toBe(other);
       expect(count).toHaveBeenCalledWith({
-        where: { questionId: 1, anonId: { not: 'anon-1' } },
+        where: { questionId: 1, userId: { not: 'user-1' } },
       });
       expect(findFirst).toHaveBeenCalledWith({
-        where: { questionId: 1, anonId: { not: 'anon-1' } },
+        where: { questionId: 1, userId: { not: 'user-1' } },
         skip: 1,
       });
       expect(pickCreate).toHaveBeenCalledWith({
-        data: { anonId: 'anon-1', questionId: 1, answerId: other.id },
+        data: { userId: 'user-1', questionId: 1, answerId: other.id },
       });
 
       randomSpy.mockRestore();
@@ -182,11 +182,11 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
     it('이미 배정이 있으면 추첨하지 않고 배정된 답변을 반환한다 — 재조회 고정', async () => {
       pickFindUnique.mockResolvedValue({ answerId: other.id, answer: other });
 
-      const result = await service.getOrAssignOtherAnswer(1, 'anon-1');
+      const result = await service.getOrAssignOtherAnswer(1, 'user-1');
 
       expect(result).toBe(other);
       expect(pickFindUnique).toHaveBeenCalledWith({
-        where: { anonId_questionId: { anonId: 'anon-1', questionId: 1 } },
+        where: { userId_questionId: { userId: 'user-1', questionId: 1 } },
         include: { answer: true },
       });
       // 고정의 핵심: 추첨도 기록도 다시 하지 않는다.
@@ -203,8 +203,8 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
       count.mockResolvedValue(3);
       findFirst.mockResolvedValue(other);
 
-      const first = await service.getOrAssignOtherAnswer(1, 'anon-1');
-      const second = await service.getOrAssignOtherAnswer(1, 'anon-1');
+      const first = await service.getOrAssignOtherAnswer(1, 'user-1');
+      const second = await service.getOrAssignOtherAnswer(1, 'user-1');
 
       expect(second).toBe(first);
       expect(pickCreate).toHaveBeenCalledTimes(1);
@@ -214,7 +214,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
       pickFindUnique.mockResolvedValue(null);
       count.mockResolvedValue(0);
 
-      const result = await service.getOrAssignOtherAnswer(1, 'anon-1');
+      const result = await service.getOrAssignOtherAnswer(1, 'user-1');
 
       expect(result).toBeNull();
       expect(findFirst).not.toHaveBeenCalled();
@@ -223,7 +223,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
     });
 
     it('배정 기록이 P2002로 충돌하면 먼저 저장된 배정을 따른다 (동시 요청)', async () => {
-      const winner = { id: 9, anonId: 'anon-3', content: '먼저 배정된 답변' };
+      const winner = { id: 9, userId: 'user-3', content: '먼저 배정된 답변' };
       pickFindUnique
         .mockResolvedValueOnce(null) // 최초 조회: 배정 없음
         .mockResolvedValue({ answerId: winner.id, answer: winner }); // 충돌 후 재조회
@@ -236,7 +236,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
         }),
       );
 
-      const result = await service.getOrAssignOtherAnswer(1, 'anon-1');
+      const result = await service.getOrAssignOtherAnswer(1, 'user-1');
 
       expect(result).toBe(winner);
     });
@@ -248,7 +248,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
       const boom = new Error('db down');
       pickCreate.mockRejectedValue(boom);
 
-      await expect(service.getOrAssignOtherAnswer(1, 'anon-1')).rejects.toBe(
+      await expect(service.getOrAssignOtherAnswer(1, 'user-1')).rejects.toBe(
         boom,
       );
     });
@@ -257,7 +257,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
       findTodayQuestion.mockResolvedValue({ id: 2 });
 
       await expect(
-        service.getOrAssignOtherAnswer(1, 'anon-1'),
+        service.getOrAssignOtherAnswer(1, 'user-1'),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(pickFindUnique).not.toHaveBeenCalled();
       expect(count).not.toHaveBeenCalled();
@@ -269,19 +269,19 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
     const cutoff = new Date('2025-10-14T00:00:00.000Z');
 
     it('마지막 답변이 365일보다 오래된 사용자의 답변과 365일 지난 배정을 지운다', async () => {
-      groupBy.mockResolvedValue([{ anonId: 'old-1' }, { anonId: 'old-2' }]);
+      groupBy.mockResolvedValue([{ userId: 'old-1' }, { userId: 'old-2' }]);
       deleteMany.mockResolvedValue({ count: 5 });
       pickDeleteMany.mockResolvedValue({ count: 2 });
 
       const result = await service.purgeInactive(now);
 
       expect(groupBy).toHaveBeenCalledWith({
-        by: ['anonId'],
+        by: ['userId'],
         having: { createdAt: { _max: { lt: cutoff } } },
       });
       expect(deleteMany).toHaveBeenCalledWith({
         where: {
-          anonId: { in: ['old-1', 'old-2'] },
+          userId: { in: ['old-1', 'old-2'] },
           createdAt: { lt: cutoff },
         },
       });

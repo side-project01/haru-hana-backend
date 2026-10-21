@@ -22,7 +22,7 @@ describe('AnswersController — 응답 계약', () => {
     content: '오늘은 산책하며 노을을 봤어요.',
     bgType: 'color',
     bgValue: '#FFE8D6',
-    anonId: 'anon-1',
+    userId: 'user-1',
     serviceDate: new Date('2026-06-18T15:00:00.000Z'),
   };
 
@@ -59,7 +59,7 @@ describe('AnswersController — 응답 계약', () => {
     it('오늘 답변이 있으면 answer에 담아 반환한다', async () => {
       findMyAnswerToday.mockResolvedValue(saved);
 
-      await expect(controller.findMine('anon-1')).resolves.toEqual({
+      await expect(controller.findMine('user-1')).resolves.toEqual({
         answer: payload,
       });
     });
@@ -68,7 +68,7 @@ describe('AnswersController — 응답 계약', () => {
       findMyAnswerToday.mockResolvedValue(null);
 
       // 최상위가 nil이면 Nest가 본문 없이 응답해버린다 — 반드시 객체여야 한다.
-      await expect(controller.findMine('anon-1')).resolves.toEqual({
+      await expect(controller.findMine('user-1')).resolves.toEqual({
         answer: null,
       });
     });
@@ -78,22 +78,22 @@ describe('AnswersController — 응답 계약', () => {
     it('타인 답변이 있으면 식별정보 없이 answer에 담아 반환한다', async () => {
       getOrAssignOtherAnswer.mockResolvedValue(saved);
 
-      // 프라이버시(8장): anonId·id·serviceDate는 절대 노출하지 않는다.
+      // 프라이버시(8장): userId·id·serviceDate는 절대 노출하지 않는다.
       // (toEqual은 정확 비교라 추가 프로퍼티가 새어나가면 실패한다)
-      await expect(controller.findOther('anon-1', 1)).resolves.toEqual({
+      await expect(controller.findOther('user-1', 1)).resolves.toEqual({
         answer: {
           content: saved.content,
           bgType: 'color',
           bgValue: '#FFE8D6',
         },
       });
-      expect(getOrAssignOtherAnswer).toHaveBeenCalledWith(1, 'anon-1');
+      expect(getOrAssignOtherAnswer).toHaveBeenCalledWith(1, 'user-1');
     });
 
     it('노출할 타인 답변이 0건이면 { answer: null }을 반환한다', async () => {
       getOrAssignOtherAnswer.mockResolvedValue(null);
 
-      const result = await controller.findOther('anon-1', 1);
+      const result = await controller.findOther('user-1', 1);
 
       expect(result).toEqual({ answer: null });
       expect(result).not.toBeNull();
@@ -104,7 +104,7 @@ describe('AnswersController — 응답 계약', () => {
     it('생성 결과는 항상 존재하므로 래핑 없이 payload를 그대로 반환한다', async () => {
       create.mockResolvedValue(saved);
 
-      await expect(controller.create('anon-1', dto)).resolves.toEqual(payload);
+      await expect(controller.create('user-1', dto)).resolves.toEqual(payload);
     });
   });
 });

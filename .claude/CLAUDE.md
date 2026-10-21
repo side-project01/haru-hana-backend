@@ -5,7 +5,7 @@
 
 ## 1. 개요 & 스택
 
-- **서비스**: 매일 질문 1개에 답하고 감성 카드를 만드는 무로그인·익명 서비스 (소규모)
+- **서비스**: 매일 질문 1개에 답하고 감성 카드를 만드는 서비스 (소규모). 클라이언트는 Android 앱, 로그인은 Google
 - **스택**: NestJS 11 · TypeScript · **Prisma + PostgreSQL** · Jest
 - **핵심 원칙**
   1. **일관성 > 완벽함** — 합의된 패턴을 따른다. 새 패턴 도입은 기존 코드를 먼저 확인하고.
@@ -47,7 +47,7 @@ prisma/
 | 변수/함수 | `camelCase` | `findTodayQuestion()` |
 | 상수/enum 값 | `UPPER_SNAKE_CASE` | `MAX_ANSWER_LENGTH` |
 | DB 모델 | `PascalCase` 단수 | `Question`, `Answer` |
-| DB 컬럼 | `camelCase` (Prisma 기본) | `serviceDate`, `anonId` |
+| DB 컬럼 | `camelCase` (Prisma 기본) | `serviceDate`, `userId` |
 | 폴더(도메인) | 복수형 권장 | `questions/`, `answers/` |
 
 ## 4. 레이어 책임
@@ -94,13 +94,14 @@ export class CreateAnswerDto {
 **설정**
 - 환경변수는 `@nestjs/config` + **Zod 스키마**로 검증한다. **누락/오류 시 앱을 즉시 종료(fail-fast)** — 런타임 중 터지는 것보다 낫다.
 - `.env`는 절대 커밋하지 않는다(이미 `.gitignore`에 포함됨). 예시는 `.env.example`로 제공.
-- DB URL, 쿠키 시크릿 등 비밀값은 항상 환경변수로.
+- DB URL, 토큰·쿠키 시크릿 등 비밀값은 항상 환경변수로.
 
 **보안 (외부 노출 API의 기본기)**
 - `main.ts`에서 **Helmet**(보안 헤더)과 **CORS 화이트리스트**(허용 오리진만)를 설정한다. Helmet은 다른 `app.use()`보다 먼저.
 - 입력은 전부 ValidationPipe로 검증(5장).
 - **금칙어 필터(P6)**: 답변 제출 시 서버에서 금칙어 검사 후 차단. `common/`의 필터 서비스로 분리.
-- **익명 식별자(P2)**: 로그인이 없으므로 **쿠키 기반 익명 ID**로 사용자를 식별한다. httpOnly·secure 쿠키 사용, 서명/시크릿은 환경변수. 이 값이 `Answer.anonId`가 된다.
+- **로그인(P2)**: Google 로그인 필수. 앱이 Credential Manager로 받은 ID 토큰을 `POST /auth/google`로 보내면 서버가 `google-auth-library`로 검증(audience=`GOOGLE_CLIENT_ID`)하고 **Bearer 세션 토큰**을 발급한다. 전역 `AuthGuard`(APP_GUARD)가 `@Public()`이 아닌 전 라우트에서 토큰을 검증하고, 이 사용자 ID가 `Answer.userId`가 된다. User에는 Google `sub`만 저장한다.
+- **익명 데이터 이전(P2)**: 로그인 이전의 `anon_id` 쿠키(HMAC 서명)는 더 이상 발급하지 않는다. 첫 로그인 때 그 쿠키를 검증해 **새 계정에만** 익명 답변·배정을 옮기고 쿠키를 지운다. 이미 있는 계정에 이 기기의 익명 데이터가 있으면 409(`ACCOUNT_EXISTS`)로 로그인을 막는다 — 합치면 하루 1회(P1)·배정 고정(P5)이 깨진다.
 - **레이트리밋**: 트래픽이 늘면 `@nestjs/throttler` 도입(지금은 필수 아님).
 - 로그·에러 응답에 식별자·답변 본문 등 민감정보를 노출하지 않는다(7장).
 
@@ -108,7 +109,7 @@ export class CreateAnswerDto {
 
 - 요청 단위로 **구조화 로그**(JSON 형태)를 남긴다. 소규모에선 Nest 기본 `Logger`로 충분하고, 필요해지면 `nestjs-pino` 등 도입.
 - 레벨 기준: `error`(처리 실패), `warn`(비정상이지만 복구됨, 예: 금칙어 차단), `log`(주요 이벤트), `debug`(개발용).
-- **금지**: 답변 본문 전체, 익명 식별자 원문, 쿠키 시크릿, 환경변수 값을 로그에 남기지 않는다.
+- **금지**: 답변 본문 전체, 사용자·익명 식별자와 Google sub 원문, 세션 토큰, 시크릿, 환경변수 값을 로그에 남기지 않는다.
 
 ## 8. Prisma & 날짜 규칙
 
@@ -119,8 +120,8 @@ export class CreateAnswerDto {
 - 여러 쓰기를 묶을 땐 `prisma.$transaction` 사용.
 
 **핵심 제약 (PRD 매핑)**
-- **P1 하루 1회**: `Answer`에 `@@unique([anonId, serviceDate])` 제약을 둬 DB 레벨에서 중복 답변을 차단한다(애플리케이션 체크만 믿지 않는다).
-- **P5 타인 답변**: 같은 `questionId`에서 `anonId != 본인`인 답변 중 무작위 1건 조회. 첫 조회 결과는 `OtherAnswerPick`에 기록하고 `@@unique([anonId, questionId])`로 사용자·질문당 1건을 강제해 **재조회에도 같은 답변이 나오게** 한다. `answerId`에는 유니크를 두지 않는다 — 같은 답변이 여러 사용자에게 배정될 수 있다.
+- **P1 하루 1회**: `Answer`에 `@@unique([userId, serviceDate])` 제약을 둬 DB 레벨에서 중복 답변을 차단한다(애플리케이션 체크만 믿지 않는다).
+- **P5 타인 답변**: 같은 `questionId`에서 `userId != 본인`인 답변 중 무작위 1건 조회. 첫 조회 결과는 `OtherAnswerPick`에 기록하고 `@@unique([userId, questionId])`로 사용자·질문당 1건을 강제해 **재조회에도 같은 답변이 나오게** 한다. `answerId`에는 유니크를 두지 않는다 — 같은 답변이 여러 사용자에게 배정될 수 있다.
 
 **날짜 규칙 (P7) — 매우 중요**
 - "서비스 날짜(`serviceDate`)"는 **KST 자정 기준**으로 계산한다. 사용자 로컬 시간과 무관.
@@ -153,17 +154,19 @@ src/modules/
 
 src/common/
 ├─ date/service-date.util.ts    # KST 자정 기준 serviceDate (P7)
-├─ identity/anon-id.*           # 쿠키 기반 익명 식별자 발급·검증 (P2)
+├─ auth/                        # 세션 토큰·전역 AuthGuard·@Public·@UserId (P2)
+├─ identity/anon-id.*           # 기존 익명 쿠키 검증(첫 로그인 데이터 이전용) (P2)
 └─ moderation/profanity.service.ts  # 금칙어 필터 (P6)
 ```
 
 | 모듈/유틸 | 책임 | PRD |
 |---|---|---|
 | `questions` | 오늘의 질문(serviceDate 매칭) 조회. 순환 로직 아님, DB 조회 | P3, 6.1 |
-| `answers` 제출 | 익명 ID + serviceDate 유니크로 하루 1회 보장, 금칙어 검사 후 저장 | P1, P4, P6 |
+| `answers` 제출 | userId + serviceDate 유니크로 하루 1회 보장, 금칙어 검사 후 저장 | P1, P4, P6 |
 | `answers` 타인 조회 | 같은 질문, 본인 제외, 무작위 1건 → 첫 조회 시 배정 기록 후 고정 노출 | P5 |
 | `service-date.util` | KST 자정 기준 날짜 계산(전 도메인 공용) | P7 |
-| `anon-id` | 무로그인 익명 식별자 발급/검증(쿠키) | P2 |
+| `auth` (common·modules) | Google 로그인, 세션 토큰 발급·검증, 첫 로그인 시 익명 데이터 이전 | P2 |
+| `anon-id` | 기존 익명 쿠키 검증(이전 전용, 신규 발급 없음) | P2 |
 | `profanity.service` | 제출 콘텐츠 금칙어 차단 | P6 |
 
 > **참고**: 카드 이미지 생성/다운로드는 클라이언트 책임(html2canvas 등), 백엔드 범위 아님. 데모용 버튼은 실서비스 미포함(PRD 9.4).
@@ -178,7 +181,7 @@ src/common/
 - **로컬 개발**: `src/main.ts` (`app.listen`) — `npm run start:dev`.
 - **서버리스 배포**: `api/index.ts` — 포트를 열지 않고 `app.init()`한 Express 인스턴스를 함수 핸들러로 노출한다.
 - 두 진입점의 미들웨어·파이프 설정(Helmet·CORS·ValidationPipe)은 **항상 동일하게 유지**한다. 한쪽만 바꾸지 않는다. 단, **Swagger는 서버리스 진입점에서 제외**한다(콜드스타트 비용·문서 비공개).
-- **cookie-parser는 쓰지 않는다.** 익명 식별자 쿠키(P2)의 서명/검증은 `AnonIdService`가 COOKIE_SECRET 기반 HMAC-SHA256으로 직접 처리한다. cookie-parser의 `signed` 기능은 `req.secret`에 의존하는데, Vercel(`@vercel/node`) 런타임이 `req.cookies`를 미리 채워 cookie-parser가 조기 반환(`req.secret` 미설정)하면 서명 쿠키 발급이 깨진다. 직접 HMAC 서명은 진입점·런타임 무관하게 동작하므로 이 함정을 원천 제거한다.
+- **cookie-parser는 쓰지 않는다.** 인증은 Bearer 세션 토큰이고, 첫 로그인 때 읽는 기존 익명 쿠키(P2)의 검증은 `AnonIdService`가 COOKIE_SECRET 기반 HMAC-SHA256으로 Cookie 헤더에서 직접 처리한다. cookie-parser의 `signed` 기능은 `req.secret`에 의존하는데, Vercel(`@vercel/node`) 런타임이 `req.cookies`를 미리 채워 cookie-parser가 조기 반환(`req.secret` 미설정)하면 서명 쿠키 발급이 깨진다. 직접 HMAC 서명은 진입점·런타임 무관하게 동작하므로 이 함정을 원천 제거한다.
 - 부팅한 앱은 모듈 전역 변수에 **캐시**해 웜 인스턴스에서 재부팅하지 않는다.
 
 **DB 커넥션 (서버리스 최대 함정)**
@@ -198,7 +201,7 @@ src/common/
 
 **설정 파일**
 - `vercel.json`: `buildCommand`에 `prisma generate` 포함(node_modules 캐시로 인한 stale 클라이언트 방지), `regions`로 함수 리전 고정(위 참조), `crons`로 매일 03:00 KST(`0 18 * * *` UTC)에 `/cron/purge-answers` 호출(마지막 답변 후 365일 지난 사용자의 답변 삭제), 전 요청을 `/api`로 rewrite.
-- 환경변수(`DATABASE_URL`·`COOKIE_SECRET`·`CRON_SECRET`·`CORS_ORIGINS`·`NODE_ENV`)는 Vercel 대시보드에 등록. `env.validation.ts`가 fail-fast라 누락 시 콜드스타트에서 즉시 실패한다.
+- 환경변수(`DATABASE_URL`·`COOKIE_SECRET`·`AUTH_TOKEN_SECRET`·`GOOGLE_CLIENT_ID`·`CRON_SECRET`·`CORS_ORIGINS`·`NODE_ENV`)는 Vercel 대시보드에 등록. `COOKIE_SECRET`은 기존 값을 유지한다 — 바꾸면 아직 이전하지 않은 기기의 익명 쿠키가 전부 무효가 된다. `env.validation.ts`가 fail-fast라 누락 시 콜드스타트에서 즉시 실패한다.
 
 **날짜(P7) 주의**
 - Vercel 함수는 UTC로 실행된다. `service-date.util`은 로컬 타임존 게터를 쓰지 않고 UTC epoch + 고정 KST 오프셋으로 계산하므로 안전 — 이 불변식을 깨지 않는다(로컬 `getHours`/`getFullYear` 등 사용 금지, `getUTC*`·`Date.UTC`만).

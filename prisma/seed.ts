@@ -4,7 +4,7 @@
 // displayDate는 반드시 serviceDate util(KST 자정 → UTC)과 동일 규칙으로 산출한다 — 날짜 로직 단일화(P7).
 //
 // Phase 3: 첫날 질문에 예시 타인 답변 N건을 주입해 초기 P5 답변 풀 0건을 방지한다.
-// 시드 답변의 anonId는 일반 사용자와 구분되는 접두사(SEED_ANON_PREFIX)를 써 본인 제외(P5)에 안 걸리게 한다.
+// 시드 답변의 userId는 일반 사용자와 구분되는 접두사(SEED_USER_PREFIX)를 써 본인 제외(P5)에 안 걸리게 한다.
 //
 // 실행: `npx prisma db seed` (package.json의 prisma.seed 설정 사용)
 
@@ -43,8 +43,8 @@ const QUESTIONS: string[] = [
 const SEED_START = new Date();
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-/** 시드 답변 전용 anonId 접두사 — 일반 사용자와 구분(본인 제외 P5에 안 걸리게). */
-const SEED_ANON_PREFIX = 'seed-';
+/** 시드 답변 전용 userId 접두사 — 일반 사용자와 구분(본인 제외 P5에 안 걸리게). */
+const SEED_USER_PREFIX = 'seed-';
 
 /** 첫날 질문(P5 초기 풀)에 주입할 예시 타인 답변 */
 const SEED_ANSWERS: { content: string; bgType: string; bgValue: string }[] = [
@@ -74,13 +74,13 @@ async function main(): Promise<void> {
   let seededAnswers = 0;
   if (firstQuestionId !== null) {
     for (let i = 0; i < SEED_ANSWERS.length; i++) {
-      const anonId = `${SEED_ANON_PREFIX}${i + 1}`;
-      // (anonId, serviceDate) unique로 재실행 시 중복 주입을 피한다(idempotent).
+      const userId = `${SEED_USER_PREFIX}${i + 1}`;
+      // (userId, serviceDate) unique로 재실행 시 중복 주입을 피한다(idempotent).
       await prisma.answer.upsert({
-        where: { anonId_serviceDate: { anonId, serviceDate: baseDate } },
+        where: { userId_serviceDate: { userId, serviceDate: baseDate } },
         update: {},
         create: {
-          anonId,
+          userId,
           questionId: firstQuestionId,
           content: SEED_ANSWERS[i].content,
           bgType: SEED_ANSWERS[i].bgType,

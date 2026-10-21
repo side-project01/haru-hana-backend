@@ -6,7 +6,7 @@ import { TodayQuestionResponseDto } from './dto/today-question-response.dto';
 /**
  * 질문 컨트롤러 (P3). 라우팅과 응답 DTO 매핑만 담당한다(CLAUDE.md 4장: 얇은 컨트롤러).
  *
- * 익명 식별자(P2)는 AnonIdMiddleware가 전 경로에 걸어주므로 여기에 가드를 붙이지 않는다.
+ * 로그인 요구(P2)는 전역 AuthGuard가 걸어주므로 여기에 가드를 붙이지 않는다.
  */
 @ApiTags('questions')
 @Controller('questions')

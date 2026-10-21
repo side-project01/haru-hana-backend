@@ -27,7 +27,7 @@ async function bootstrap(): Promise<Express> {
   const config = app.get(ConfigService<EnvConfig, true>);
 
   // main.ts와 동일한 순서·설정(CLAUDE.md 6장). 단, Swagger는 서버리스에서 제외.
-  // 익명 식별자 쿠키(P2) 서명은 AnonIdService(HMAC)가 직접 처리 → cookie-parser 불필요.
+  // 로그인은 Bearer 세션 토큰(P2), 기존 anon_id 쿠키 검증은 AnonIdService(HMAC) → cookie-parser 불필요.
   app.use(helmet());
   app.enableCors({
     origin: config.get('CORS_ORIGINS', { infer: true }),

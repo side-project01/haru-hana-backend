@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { TodayQuestionResponseDto } from '../src/modules/questions/dto/today-question-response.dto';
-import { createTestApp } from './support/app-fixture';
+import { bearer, createTestApp } from './support/app-fixture';
 
 /**
  * `GET /questions/today` 의 실제 HTTP 응답 계약 (DB 없이 PrismaService 를 대역으로 교체).
@@ -11,7 +11,7 @@ import { createTestApp } from './support/app-fixture';
  *  - 응답 본문에 answeredToday 가 없는가(단일 진실은 GET /answers/me).
  *  - 부팅 경로의 DB 왕복이 1건인가 — answer 테이블을 조회하지 않아야 한다.
  *
- * 익명 식별자(P2) 쿠키 자체의 계약은 identity.e2e-spec.ts 가 담당한다.
+ * 로그인(P2) 자체의 계약은 auth.e2e-spec.ts 가 담당한다.
  */
 describe('GET /questions/today (e2e)', () => {
   let app: INestApplication<App>;
@@ -51,6 +51,7 @@ describe('GET /questions/today (e2e)', () => {
   it('질문과 serviceDate 를 반환하고 answeredToday 는 담지 않는다', async () => {
     const res = await request(app.getHttpServer())
       .get('/questions/today')
+      .set('Authorization', bearer(app, 'user-1'))
       .expect(200);
 
     const body = bodyOf(res);
@@ -63,7 +64,10 @@ describe('GET /questions/today (e2e)', () => {
   });
 
   it('답변 테이블을 조회하지 않는다 — 부팅 경로 DB 왕복 1건', async () => {
-    await request(app.getHttpServer()).get('/questions/today').expect(200);
+    await request(app.getHttpServer())
+      .get('/questions/today')
+      .set('Authorization', bearer(app, 'user-1'))
+      .expect(200);
 
     expect(questionFindFirst).toHaveBeenCalledTimes(1);
     expect(answerFindUnique).not.toHaveBeenCalled();
@@ -74,6 +78,7 @@ describe('GET /questions/today (e2e)', () => {
 
     const res = await request(app.getHttpServer())
       .get('/questions/today')
+      .set('Authorization', bearer(app, 'user-1'))
       .expect(200);
 
     expect(bodyOf(res).question).toBeNull();

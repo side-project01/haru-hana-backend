@@ -1,26 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { EnvConfig } from '../../config/env.validation';
 
 /**
- * 익명 식별자 발급·서명 서비스 (P2).
+ * 익명 식별자 서명 서비스 (P2).
+ *
+ * 로그인 도입 후 anon_id는 더 이상 발급하지 않는다. 기존 앱이 보관 중인 쿠키를 첫 로그인 때
+ * 검증해, 그 기기의 익명 데이터를 계정으로 옮기는 데에만 쓴다(AuthController).
  *
  * 쿠키 값을 COOKIE_SECRET 기반 HMAC-SHA256으로 직접 서명/검증한다.
  * cookie-parser의 서명 기능(req.secret)에 의존하지 않으므로 로컬(main.ts)과
  * 서버리스(Vercel) 진입점이 동일하게 동작한다 — @vercel/node가 req.cookies를
  * 미리 채워 cookie-parser 서명이 깨지던 문제를 원천 제거(CLAUDE.md 11장).
- *
- * HTTP·쿠키 I/O(헤더 읽기, Set-Cookie)는 AnonIdMiddleware가 담당한다.
  */
 @Injectable()
 export class AnonIdService {
   constructor(private readonly config: ConfigService<EnvConfig, true>) {}
-
-  /** 충돌 가능성이 사실상 없는 무작위 익명 ID를 생성한다. */
-  generate(): string {
-    return randomUUID();
-  }
 
   /**
    * anonId에 서명해 쿠키에 담을 값을 만든다. 형식: `<anonId>.<base64url HMAC>`.

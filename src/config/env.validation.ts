@@ -18,8 +18,18 @@ export const envSchema = z.object({
   /** HTTP 포트 */
   PORT: z.coerce.number().int().positive().default(3000),
 
-  /** 익명 식별자 쿠키 서명 시크릿 (P2). 빈 값 금지. */
+  /** 익명 식별자 쿠키 서명 시크릿 (P2). 로그인 시 기존 익명 데이터를 옮길 때 쿠키 검증에 쓴다. */
   COOKIE_SECRET: z.string().min(1, 'COOKIE_SECRET는 비어 있을 수 없습니다'),
+
+  /** 로그인 세션 토큰 서명 시크릿 (P2). 빈 값 금지. */
+  AUTH_TOKEN_SECRET: z
+    .string()
+    .min(1, 'AUTH_TOKEN_SECRET는 비어 있을 수 없습니다'),
+
+  /** Google OAuth 웹 클라이언트 ID. 앱이 받은 ID 토큰의 audience로 검증한다. */
+  GOOGLE_CLIENT_ID: z
+    .string()
+    .min(1, 'GOOGLE_CLIENT_ID는 비어 있을 수 없습니다'),
 
   /** Vercel Cron 호출 인증 시크릿. Vercel이 `Authorization: Bearer <값>`으로 보낸다. */
   CRON_SECRET: z.string().min(1, 'CRON_SECRET는 비어 있을 수 없습니다'),

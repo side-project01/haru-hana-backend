@@ -35,12 +35,12 @@ export class AnswersService {
    * 답변을 제출한다 (P1·P3·P6).
    * 1) 오늘의 질문에 대한 제출인지 검증 → 아니면 400.
    * 2) 금칙어 검사 → 걸리면 400. 3) serviceDate 계산 후 저장.
-   * 하루 1회 제약(@@unique[anonId, serviceDate])은 DB가 강제하며, 충돌 시 409로 변환한다.
-   * @param anonId 익명 식별자 (P2)
+   * 하루 1회 제약(@@unique[userId, serviceDate])은 DB가 강제하며, 충돌 시 409로 변환한다.
+   * @param userId 로그인 사용자 ID (P2)
    * @param now 기준 시각(기본값: 현재). 테스트에서 임의 시각 주입 가능.
    */
   async create(
-    anonId: string,
+    userId: string,
     dto: CreateAnswerDto,
     now: Date = new Date(),
   ): Promise<Answer> {
@@ -62,7 +62,7 @@ export class AnswersService {
     try {
       return await this.prisma.answer.create({
         data: {
-          anonId,
+          userId,
           questionId: dto.questionId,
           content: dto.content,
           bgType: dto.bgType,
@@ -84,17 +84,17 @@ export class AnswersService {
 
   /**
    * 오늘 본인 답변을 조회한다(카드 다시보기 재진입용, 5.2/5.3). 없으면 null.
-   * @param anonId 익명 식별자 (P2)
+   * @param userId 로그인 사용자 ID (P2)
    * @param now 기준 시각(기본값: 현재).
    */
   findMyAnswerToday(
-    anonId: string,
+    userId: string,
     now: Date = new Date(),
   ): Promise<Answer | null> {
     const serviceDate = getServiceDate(now);
 
     return this.prisma.answer.findUnique({
-      where: { anonId_serviceDate: { anonId, serviceDate } },
+      where: { userId_serviceDate: { userId, serviceDate } },
     });
   }
 
@@ -114,12 +114,12 @@ export class AnswersService {
    * 오늘의 질문만 받는다. 지난 질문 ID로 보관 중인 과거 답변을 꺼내 볼 수 없게 하기 위해서다.
    *
    * @param questionId 대상 질문(배정 단위). 오늘의 질문이 아니면 400
-   * @param anonId 본인 식별자(추첨 제외 대상이자 배정 주체)
+   * @param userId 본인 식별자(추첨 제외 대상이자 배정 주체)
    * @param now 기준 시각(기본값: 현재).
    */
   async getOrAssignOtherAnswer(
     questionId: number,
-    anonId: string,
+    userId: string,
     now: Date = new Date(),
   ): Promise<Answer | null> {
     const todayQuestion = await this.questions.findTodayQuestion(now);
@@ -127,15 +127,15 @@ export class AnswersService {
       throw new BadRequestException('오늘의 질문만 조회할 수 있어요.');
     }
 
-    const assigned = await this.findAssignedOtherAnswer(questionId, anonId);
+    const assigned = await this.findAssignedOtherAnswer(questionId, userId);
     if (assigned) return assigned;
 
-    const candidate = await this.drawRandomOtherAnswer(questionId, anonId);
+    const candidate = await this.drawRandomOtherAnswer(questionId, userId);
     if (!candidate) return null;
 
     try {
       await this.prisma.otherAnswerPick.create({
-        data: { anonId, questionId, answerId: candidate.id },
+        data: { userId, questionId, answerId: candidate.id },
       });
       return candidate;
     } catch (error) {
@@ -145,7 +145,7 @@ export class AnswersService {
         error.code === 'P2002'
       ) {
         return (
-          (await this.findAssignedOtherAnswer(questionId, anonId)) ?? candidate
+          (await this.findAssignedOtherAnswer(questionId, userId)) ?? candidate
         );
       }
       throw error;
@@ -164,12 +164,12 @@ export class AnswersService {
     const cutoff = new Date(now.getTime() - ANSWER_RETENTION_DAYS * DAY_MS);
 
     const inactive = await this.prisma.answer.groupBy({
-      by: ['anonId'],
+      by: ['userId'],
       having: { createdAt: { _max: { lt: cutoff } } },
     });
     const { count: answers } = await this.prisma.answer.deleteMany({
       where: {
-        anonId: { in: inactive.map(({ anonId }) => anonId) },
+        userId: { in: inactive.map(({ userId }) => userId) },
         createdAt: { lt: cutoff }, // 조회와 삭제 사이에 쓴 새 답변은 지우지 않는다
       },
     });
@@ -186,10 +186,10 @@ export class AnswersService {
   /** 이미 배정된 타인 답변을 조회한다. 없으면 null. */
   private async findAssignedOtherAnswer(
     questionId: number,
-    anonId: string,
+    userId: string,
   ): Promise<Answer | null> {
     const pick = await this.prisma.otherAnswerPick.findUnique({
-      where: { anonId_questionId: { anonId, questionId } },
+      where: { userId_questionId: { userId, questionId } },
       include: { answer: true },
     });
 
@@ -199,11 +199,11 @@ export class AnswersService {
   /** 본인을 제외한 후보 중 무작위 1건을 뽑는다(기록하지 않는다). 후보가 0건이면 null. */
   private async drawRandomOtherAnswer(
     questionId: number,
-    anonId: string,
+    userId: string,
   ): Promise<Answer | null> {
     const where: Prisma.AnswerWhereInput = {
       questionId,
-      anonId: { not: anonId },
+      userId: { not: userId },
     };
 
     const total = await this.prisma.answer.count({ where });
