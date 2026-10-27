@@ -9,12 +9,13 @@ import { bearer, createTestApp } from './support/app-fixture';
  *
  * 컨트롤러 단위 테스트로는 잡히지 않는 것들을 확인한다:
  *  - 응답 본문에 answeredToday 가 없는가(단일 진실은 GET /answers/me).
- *  - 부팅 경로의 DB 왕복이 1건인가 — answer 테이블을 조회하지 않아야 한다.
+ *  - 부팅 경로의 DB 왕복이 2건(가드의 계정 확인 + 질문 조회)인가 — answer 테이블을 조회하지 않아야 한다.
  *
  * 로그인(P2) 자체의 계약은 auth.e2e-spec.ts 가 담당한다.
  */
 describe('GET /questions/today (e2e)', () => {
   let app: INestApplication<App>;
+  let userFindUnique: jest.Mock;
   let questionFindFirst: jest.Mock;
   let answerFindUnique: jest.Mock;
 
@@ -30,10 +31,12 @@ describe('GET /questions/today (e2e)', () => {
     res.body as TodayQuestionResponseDto;
 
   beforeAll(async () => {
+    userFindUnique = jest.fn().mockResolvedValue({ sessionsRevokedAt: null });
     questionFindFirst = jest.fn().mockResolvedValue(question);
     answerFindUnique = jest.fn().mockResolvedValue(null);
 
     app = await createTestApp({
+      user: { findUnique: userFindUnique },
       question: { findFirst: questionFindFirst },
       answer: { findUnique: answerFindUnique },
     });
@@ -44,6 +47,7 @@ describe('GET /questions/today (e2e)', () => {
   });
 
   beforeEach(() => {
+    userFindUnique.mockClear();
     questionFindFirst.mockClear();
     answerFindUnique.mockClear();
   });
@@ -63,12 +67,13 @@ describe('GET /questions/today (e2e)', () => {
     expect(res.headers['content-type']).toMatch(/application\/json/);
   });
 
-  it('답변 테이블을 조회하지 않는다 — 부팅 경로 DB 왕복 1건', async () => {
+  it('답변 테이블을 조회하지 않는다 — 부팅 경로 DB 왕복 2건(계정 확인 + 질문)', async () => {
     await request(app.getHttpServer())
       .get('/questions/today')
       .set('Authorization', bearer(app, 'user-1'))
       .expect(200);
 
+    expect(userFindUnique).toHaveBeenCalledTimes(1);
     expect(questionFindFirst).toHaveBeenCalledTimes(1);
     expect(answerFindUnique).not.toHaveBeenCalled();
   });

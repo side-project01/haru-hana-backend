@@ -54,7 +54,7 @@ describe('QuestionsService (P3 — 1일 1질문)', () => {
       expect(result.serviceDate).toEqual(getServiceDate(now));
     });
 
-    it('답변 여부를 조회하지 않는다 — 부팅 경로의 DB 왕복을 1건으로 유지한다', async () => {
+    it('답변 여부를 조회하지 않는다 — 이 서비스의 DB 왕복은 질문 조회 1건이다', async () => {
       findFirst.mockResolvedValue({ id: 1, body: '오늘의 질문', active: true });
 
       await service.getToday(new Date('2026-06-19T03:00:00.000Z'));

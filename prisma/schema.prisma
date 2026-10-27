@@ -28,9 +28,10 @@ datasource db {
 // Google 로그인 사용자 (P2). 개인정보 최소화를 위해 Google 고유 ID(sub)만 저장한다.
 // 첫 로그인 때만 생성되며, 그때 기기의 익명(anon_id) 답변·배정을 이 계정으로 옮긴다.
 model User {
-  id        String   @id @default(uuid())
-  googleSub String   @unique // Google ID 토큰의 sub
-  createdAt DateTime @default(now())
+  id                String    @id @default(uuid())
+  googleSub         String    @unique // Google ID 토큰의 sub
+  sessionsRevokedAt DateTime? // 로그아웃 시각. 이 시각까지 발급된 세션 토큰은 무효
+  createdAt         DateTime  @default(now())
 }
 
 // Answer·OtherAnswerPick의 userId는 User를 FK로 참조하지 않는 문자열이다.

@@ -15,9 +15,12 @@ describe('SessionTokenService (P2 — 세션 토큰)', () => {
     return new SessionTokenService(config);
   }
 
-  it('sign한 토큰을 verify하면 userId를 돌려준다(왕복)', () => {
+  it('sign한 토큰을 verify하면 userId와 발급 시각을 돌려준다(왕복)', () => {
     const service = makeService();
-    expect(service.verify(service.sign('user-1', now), now)).toBe('user-1');
+    expect(service.verify(service.sign('user-1', now), now)).toEqual({
+      userId: 'user-1',
+      issuedAt: now,
+    });
   });
 
   it('만료 시각이 지나면 null을 반환한다', () => {
@@ -27,7 +30,7 @@ describe('SessionTokenService (P2 — 세션 토큰)', () => {
     const justBefore = new Date(now.getTime() + SESSION_TOKEN_TTL_MS - 1);
     const expired = new Date(now.getTime() + SESSION_TOKEN_TTL_MS);
 
-    expect(service.verify(token, justBefore)).toBe('user-1');
+    expect(service.verify(token, justBefore)?.userId).toBe('user-1');
     expect(service.verify(token, expired)).toBeNull();
   });
 

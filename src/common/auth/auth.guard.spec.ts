@@ -1,5 +1,6 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { PrismaService } from '../prisma/prisma.service';
 import { AuthGuard } from './auth.guard';
 import { SessionTokenService } from './session-token.service';
 import { RequestWithUserId, SESSION_TOKEN_HEADER } from './auth.constants';
@@ -10,9 +11,12 @@ describe('AuthGuard (P2 — 로그인 필수)', () => {
   let verify: jest.Mock;
   let sign: jest.Mock;
   let setHeader: jest.Mock;
+  let userFindUnique: jest.Mock;
+
+  const issuedAt = new Date('2026-10-27T00:00:00Z');
 
   /** 주어진 Authorization 헤더로 가드를 돌리고 요청 객체를 돌려준다. */
-  function run(authorization?: string): RequestWithUserId {
+  async function run(authorization?: string): Promise<RequestWithUserId> {
     const request = {
       headers: authorization ? { authorization } : {},
     } as RequestWithUserId;
@@ -25,36 +29,38 @@ describe('AuthGuard (P2 — 로그인 필수)', () => {
       }),
     } as unknown as ExecutionContext;
 
-    guard.canActivate(context);
+    await guard.canActivate(context);
     return request;
   }
 
   beforeEach(() => {
     isPublic = false;
-    verify = jest.fn().mockReturnValue('user-1');
+    verify = jest.fn().mockReturnValue({ userId: 'user-1', issuedAt });
     sign = jest.fn().mockReturnValue('renewed-token');
     setHeader = jest.fn();
+    userFindUnique = jest.fn().mockResolvedValue({ sessionsRevokedAt: null });
     const reflector = {
       getAllAndOverride: () => isPublic,
     } as unknown as Reflector;
 
-    guard = new AuthGuard(reflector, {
-      verify,
-      sign,
-    } as unknown as SessionTokenService);
+    guard = new AuthGuard(
+      reflector,
+      { verify, sign } as unknown as SessionTokenService,
+      { user: { findUnique: userFindUnique } } as unknown as PrismaService,
+    );
   });
 
-  it('@Public() 라우트는 토큰 없이 통과한다', () => {
+  it('@Public() 라우트는 토큰 없이 통과한다', async () => {
     isPublic = true;
 
-    const request = run();
+    const request = await run();
 
     expect(request.userId).toBeUndefined();
     expect(verify).not.toHaveBeenCalled();
   });
 
-  it('유효한 Bearer 토큰이면 userId를 주입하고 새 토큰을 응답 헤더로 내려 만료를 연장한다', () => {
-    const request = run('Bearer good-token');
+  it('유효한 Bearer 토큰이면 userId를 주입하고 새 토큰을 응답 헤더로 내려 만료를 연장한다', async () => {
+    const request = await run('Bearer good-token');
 
     expect(verify).toHaveBeenCalledWith('good-token');
     expect(request.userId).toBe('user-1');
@@ -67,16 +73,46 @@ describe('AuthGuard (P2 — 로그인 필수)', () => {
 
   it.each([[undefined], ['good-token'], ['Basic good-token'], ['Bearer ']])(
     'Authorization 헤더가 %p이면 401',
-    (authorization) => {
-      expect(() => run(authorization)).toThrow(UnauthorizedException);
+    async (authorization) => {
+      await expect(run(authorization)).rejects.toThrow(UnauthorizedException);
       expect(setHeader).not.toHaveBeenCalled();
     },
   );
 
-  it('토큰 검증에 실패하면(변조·만료) 401', () => {
+  it('토큰 검증에 실패하면(변조·만료) 401', async () => {
     verify.mockReturnValue(null);
 
-    expect(() => run('Bearer bad-token')).toThrow(UnauthorizedException);
+    await expect(run('Bearer bad-token')).rejects.toThrow(
+      UnauthorizedException,
+    );
     expect(setHeader).not.toHaveBeenCalled();
+  });
+
+  it('서명이 맞아도 계정이 없으면(탈퇴) 401', async () => {
+    userFindUnique.mockResolvedValue(null);
+
+    await expect(run('Bearer good-token')).rejects.toThrow(
+      UnauthorizedException,
+    );
+    expect(setHeader).not.toHaveBeenCalled();
+  });
+
+  it('로그아웃 시각까지 발급된 토큰은 401', async () => {
+    userFindUnique.mockResolvedValue({ sessionsRevokedAt: issuedAt });
+
+    await expect(run('Bearer good-token')).rejects.toThrow(
+      UnauthorizedException,
+    );
+    expect(setHeader).not.toHaveBeenCalled();
+  });
+
+  it('로그아웃 뒤에 발급된 토큰은 통과한다(다시 로그인)', async () => {
+    userFindUnique.mockResolvedValue({
+      sessionsRevokedAt: new Date(issuedAt.getTime() - 1),
+    });
+
+    const request = await run('Bearer good-token');
+
+    expect(request.userId).toBe('user-1');
   });
 });

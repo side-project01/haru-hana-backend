@@ -85,6 +85,8 @@ sequenceDiagram
 - 익명 `anon_id` 쿠키는 더 이상 발급하지 않는다. `AnonIdService`(COOKIE_SECRET HMAC)는 이전할 때 기존 쿠키를 검증하는 데에만 쓴다.
 - 세션 토큰 형식: `<userId>.<만료ms>.<base64url HMAC(AUTH_TOKEN_SECRET)>`. 365일 유효하다.
 - **전역 `AuthGuard`(APP_GUARD)** 가 `@Public()`이 아닌 전 라우트에서 `Authorization: Bearer`를 검증하고 `request.userId`를 채운다. 컨트롤러는 `@UserId()`로 받는다. 매 요청 응답 헤더 `X-Session-Token`으로 새 토큰을 내려 만료를 "마지막 이용 + 365일"로 민다.
+- 가드는 서명 검증 뒤 `User`를 한 번 조회해, 계정이 없거나(탈퇴) 로그아웃(`sessionsRevokedAt`) 전에 발급된 토큰이면 401로 막는다. 이 때문에 요청마다 DB 왕복이 1건 더 든다.
+- 로그아웃 `POST /auth/logout`(204): `sessionsRevokedAt`을 지금으로 기록해 이 계정에 지금까지 발급된 토큰을 모두 무효화한다. 발급 시각은 토큰에 없으므로 `만료 시각 − 365일`로 되돌려 구한다 — TTL을 바꾸면 이 계산도 함께 봐야 한다.
 - 가드 등록은 `AuthModule`의 provider로 한다. `useGlobalGuards()`를 쓰지 않는다 — 진입점이 `main.ts`·`api/index.ts` 둘이라 한쪽만 고치면 조용히 어긋난다.
 - `@Public()`: `POST /auth/google`, `GET /cron/purge-answers`(CRON_SECRET 가드로 인증).
 
@@ -113,14 +115,14 @@ sequenceDiagram
 
 응답 DTO (`TodayQuestionResponseDto`):
 
-| 필드 | 설명 |
-|---|---|
-| `question` | 오늘 매칭 질문 `{ id, body }`. 운영자 미등록일이면 `null` |
-| `serviceDate` | KST 자정 기준 서비스 날짜 (UTC ISO-8601) |
+| 필드          | 설명                                                      |
+| ------------- | --------------------------------------------------------- |
+| `question`    | 오늘 매칭 질문 `{ id, body }`. 운영자 미등록일이면 `null` |
+| `serviceDate` | KST 자정 기준 서비스 날짜 (UTC ISO-8601)                  |
 
 - 질문은 순환 로직이 아니라 `displayDate`(serviceDate 매칭 키)로 **DB에서 조회**한다.
 - **"오늘 답변했는지"는 여기 없다.** `GET /answers/me`가 그 사실의 단일 진실이다 — 클라이언트는 카드 복원 때문에 어차피 답변 본문이 필요해 그쪽을 써야 하므로, 같은 사실의 출처를 둘로 두지 않는다.
-- 부팅 경로의 DB 왕복은 1건(`Question` 조회)이다. `Answer` 테이블은 조회하지 않는다.
+- 부팅 경로의 DB 왕복은 2건이다 — `AuthGuard`의 계정 확인(`User`) 1건과 `Question` 조회 1건. `Answer` 테이블은 조회하지 않는다.
 
 ### 3. 서비스 날짜 — P7 (`common/date/service-date.util`)
 
@@ -159,7 +161,17 @@ flowchart LR
 `GET /answers/me/history?month=YYYY-MM`은 그 달(KST 달력, P7)의 본인 답변을 날짜 오름차순으로 내려준다. 앱의 "내 기록" 화면이 달 단위로 불러가 기기에 저장해 두고, 이미 받은 달은 다시 부르지 않는다.
 
 ```json
-{ "answers": [{ "serviceDate": "2026-10-21", "question": "오늘 하루 중…", "content": "…", "bgType": "color", "bgValue": "#FFE8D6" }] }
+{
+  "answers": [
+    {
+      "serviceDate": "2026-10-21",
+      "question": "오늘 하루 중…",
+      "content": "…",
+      "bgType": "color",
+      "bgValue": "#FFE8D6"
+    }
+  ]
+}
 ```
 
 - 지난 질문은 앱이 알 방법이 없으므로 질문 본문을 함께 담는다. `serviceDate`는 KST 날짜 라벨(`formatServiceDate`)이다.
@@ -168,12 +180,12 @@ flowchart LR
 
 ## 데이터 모델 (`prisma/schema.prisma`)
 
-| 모델 | 용도 | 핵심 필드 |
-|---|---|---|
-| `User` | Google 로그인 사용자 (P2) | `id`(uuid) · `googleSub`(@unique). 개인정보는 저장하지 않는다 |
-| `Question` | 오늘의 질문 (P3) | `body` · `displayDate`(@unique, serviceDate 매칭 키) · `active` |
-| `Answer` | 답변 (P1 · P4) | `userId` · `questionId` · `content` · `bgType`/`bgValue` · `serviceDate`<br/>`@@unique([userId, serviceDate])`로 하루 1회를 DB가 강제 |
-| `OtherAnswerPick` | 타인 답변 배정 (P5) | `userId` · `questionId` · `answerId`<br/>`@@unique([userId, questionId])`로 고정 노출을 DB가 강제 |
+| 모델              | 용도                      | 핵심 필드                                                                                                                             |
+| ----------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `User`            | Google 로그인 사용자 (P2) | `id`(uuid) · `googleSub`(@unique). 개인정보는 저장하지 않는다                                                                         |
+| `Question`        | 오늘의 질문 (P3)          | `body` · `displayDate`(@unique, serviceDate 매칭 키) · `active`                                                                       |
+| `Answer`          | 답변 (P1 · P4)            | `userId` · `questionId` · `content` · `bgType`/`bgValue` · `serviceDate`<br/>`@@unique([userId, serviceDate])`로 하루 1회를 DB가 강제 |
+| `OtherAnswerPick` | 타인 답변 배정 (P5)       | `userId` · `questionId` · `answerId`<br/>`@@unique([userId, questionId])`로 고정 노출을 DB가 강제                                     |
 
 > `userId`는 `User.id`를 **외래키가 아닌 문자열로** 참조한다. 아직 계정으로 옮겨지지 않은 익명 시절 데이터가 anonId 값으로 남아 있을 수 있기 때문이다(보유 기간이 지나면 cron이 지운다).
 
@@ -184,13 +196,13 @@ flowchart LR
 
 `config/env.validation.ts`가 Zod로 검증하며 누락/오류 시 **즉시 종료(fail-fast)**한다.
 
-| 변수 | 용도 |
-|---|---|
-| `DATABASE_URL` | 런타임 DB 연결(pooled) |
-| `DIRECT_URL` | 마이그레이션용 직접 연결 |
-| `COOKIE_SECRET` | 기존 anon_id 쿠키 HMAC 검증 키 (P2). **기존 값 유지** — 바꾸면 미이전 기기의 쿠키가 무효가 된다 |
-| `AUTH_TOKEN_SECRET` | 세션 토큰 HMAC 서명 키 (P2) |
-| `GOOGLE_CLIENT_ID` | Google OAuth 웹 클라이언트 ID — ID 토큰 audience (P2) |
-| `CORS_ORIGINS` | CORS 허용 오리진 화이트리스트 |
-| `NODE_ENV` | 실행 환경 |
-| `PORT` | 로컬 개발 포트 |
+| 변수                | 용도                                                                                            |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`      | 런타임 DB 연결(pooled)                                                                          |
+| `DIRECT_URL`        | 마이그레이션용 직접 연결                                                                        |
+| `COOKIE_SECRET`     | 기존 anon_id 쿠키 HMAC 검증 키 (P2). **기존 값 유지** — 바꾸면 미이전 기기의 쿠키가 무효가 된다 |
+| `AUTH_TOKEN_SECRET` | 세션 토큰 HMAC 서명 키 (P2)                                                                     |
+| `GOOGLE_CLIENT_ID`  | Google OAuth 웹 클라이언트 ID — ID 토큰 audience (P2)                                           |
+| `CORS_ORIGINS`      | CORS 허용 오리진 화이트리스트                                                                   |
+| `NODE_ENV`          | 실행 환경                                                                                       |
+| `PORT`              | 로컬 개발 포트                                                                                  |

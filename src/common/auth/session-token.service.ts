@@ -4,6 +4,12 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { EnvConfig } from '../../config/env.validation';
 import { SESSION_TOKEN_TTL_MS } from './auth.constants';
 
+/** 검증된 세션 토큰의 내용. */
+export interface VerifiedSession {
+  userId: string;
+  issuedAt: Date;
+}
+
 /**
  * 로그인 세션 토큰 발급·검증 서비스 (P2).
  *
@@ -24,10 +30,11 @@ export class SessionTokenService {
   }
 
   /**
-   * 토큰을 검증한다. 유효하면 userId를, 변조·형식오류·만료면 null을 반환한다.
+   * 토큰을 검증한다. 유효하면 userId와 발급 시각을, 변조·형식오류·만료면 null을 반환한다.
+   * 발급 시각은 만료 시각 − TTL로 되돌려 구한다(로그아웃 이전 토큰 판별용).
    * 서명 비교는 타이밍 공격 방지를 위해 timingSafeEqual로 수행한다.
    */
-  verify(token: string, now: Date = new Date()): string | null {
+  verify(token: string, now: Date = new Date()): VerifiedSession | null {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
 
@@ -37,8 +44,9 @@ export class SessionTokenService {
     if (provided.length !== expected.length) return null;
     if (!timingSafeEqual(provided, expected)) return null;
 
-    if (!(Number(expiresAt) > now.getTime())) return null;
-    return userId;
+    const expiresAtMs = Number(expiresAt);
+    if (!(expiresAtMs > now.getTime())) return null;
+    return { userId, issuedAt: new Date(expiresAtMs - SESSION_TOKEN_TTL_MS) };
   }
 
   /** AUTH_TOKEN_SECRET으로 value의 HMAC-SHA256을 base64url로 계산한다. */

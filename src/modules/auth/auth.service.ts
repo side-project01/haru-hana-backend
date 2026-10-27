@@ -53,6 +53,18 @@ export class AuthService {
     }
   }
 
+  /**
+   * 로그아웃한다. 지금까지 발급된 이 계정의 세션 토큰이 모두 무효가 된다(AuthGuard가 확인).
+   * @param userId 로그인 사용자 ID
+   * @param now 로그아웃 시각. 테스트에서 고정하려고 받는다
+   */
+  async logout(userId: string, now: Date = new Date()): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { sessionsRevokedAt: now },
+    });
+  }
+
   /** 기존 계정 로그인. 옮길 익명 데이터가 남아 있으면 막는다. */
   private async loginExisting(
     user: User,

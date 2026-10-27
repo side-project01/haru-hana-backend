@@ -1,6 +1,7 @@
 import { Body, Controller, HttpCode, Post, Req, Res } from '@nestjs/common';
 import {
   ApiConflictResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -9,6 +10,7 @@ import {
 import type { Request, Response } from 'express';
 import { Public } from '../../common/auth/public.decorator';
 import { SessionTokenService } from '../../common/auth/session-token.service';
+import { UserId } from '../../common/auth/user-id.decorator';
 import { AnonIdService } from '../../common/identity/anon-id.service';
 import {
   ANON_ID_CLEAR_COOKIE_OPTIONS,
@@ -21,7 +23,7 @@ import { GoogleLoginDto } from './dto/google-login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 
 /**
- * 인증 컨트롤러 (P2). Google ID 토큰 검증, 익명 쿠키 읽기·삭제, 세션 토큰 발급만 담당한다.
+ * 인증 컨트롤러 (P2). Google ID 토큰 검증, 익명 쿠키 읽기·삭제, 세션 토큰 발급·로그아웃을 담당한다.
  * 계정·마이그레이션 판단은 AuthService가 한다.
  */
 @ApiTags('auth')
@@ -61,5 +63,16 @@ export class AuthController {
     // 이전이 끝났으니 익명 쿠키는 더 쓰지 않는다. 409면 여기까지 오지 않아 쿠키가 남는다.
     response.clearCookie(ANON_ID_COOKIE, ANON_ID_CLEAR_COOKIE_OPTIONS);
     return { token: this.sessionToken.sign(user.id) };
+  }
+
+  @Post('logout')
+  @HttpCode(204)
+  @ApiOperation({
+    summary: '로그아웃 (이 계정에 지금까지 발급된 세션 토큰을 모두 무효화)',
+  })
+  @ApiNoContentResponse({ description: '로그아웃 완료' })
+  @ApiUnauthorizedResponse({ description: '세션 토큰이 없거나 무효' })
+  async logout(@UserId() userId: string): Promise<void> {
+    await this.authService.logout(userId);
   }
 }

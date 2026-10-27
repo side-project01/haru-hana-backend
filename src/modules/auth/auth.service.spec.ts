@@ -13,6 +13,7 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
   let pickFindFirst: jest.Mock;
   let answerUpdateMany: jest.Mock;
   let pickUpdateMany: jest.Mock;
+  let userUpdate: jest.Mock;
 
   const existingUser = { id: 'user-1', googleSub: 'sub-1' };
   const newUser = { id: 'user-new', googleSub: 'sub-1' };
@@ -25,6 +26,7 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
     pickFindFirst = jest.fn().mockResolvedValue(null);
     answerUpdateMany = jest.fn().mockResolvedValue({ count: 3 });
     pickUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+    userUpdate = jest.fn().mockResolvedValue(existingUser);
 
     const tx = {
       user: { create: userCreate },
@@ -35,6 +37,7 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
       user: {
         findUnique: userFindUnique,
         findUniqueOrThrow: userFindUniqueOrThrow,
+        update: userUpdate,
       },
       answer: { findFirst: answerFindFirst },
       otherAnswerPick: { findFirst: pickFindFirst },
@@ -127,6 +130,19 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
       );
       expect(answerFindFirst).not.toHaveBeenCalled();
       expect(userCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('로그아웃', () => {
+    it('로그아웃 시각을 기록해 지금까지 발급된 세션 토큰을 무효로 만든다', async () => {
+      const now = new Date('2026-10-27T00:00:00Z');
+
+      await service.logout('user-1', now);
+
+      expect(userUpdate).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { sessionsRevokedAt: now },
+      });
     });
   });
 });

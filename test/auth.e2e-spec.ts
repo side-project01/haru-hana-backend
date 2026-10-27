@@ -68,7 +68,12 @@ describe('로그인 (e2e)', () => {
 
   beforeEach(() => {
     verifyGoogle.mockReset().mockResolvedValue('google-sub-1');
-    userFindUnique.mockReset().mockResolvedValue(null);
+    // AuthGuard는 id로 계정을 확인하고, 로그인은 googleSub로 기존 계정을 찾는다.
+    userFindUnique
+      .mockReset()
+      .mockImplementation(({ where }: { where: { id?: string } }) =>
+        Promise.resolve(where.id ? { sessionsRevokedAt: null } : null),
+      );
     userCreate.mockReset().mockResolvedValue({ id: 'user-new' });
     answerFindFirst.mockReset().mockResolvedValue(null);
     answerUpdateMany.mockReset().mockResolvedValue({ count: 2 });
@@ -96,7 +101,7 @@ describe('로그인 (e2e)', () => {
         .expect(200);
 
       const renewed = res.headers[SESSION_TOKEN_HEADER.toLowerCase()];
-      expect(app.get(SessionTokenService).verify(String(renewed))).toBe(
+      expect(app.get(SessionTokenService).verify(String(renewed))?.userId).toBe(
         'user-1',
       );
     });
@@ -123,7 +128,9 @@ describe('로그인 (e2e)', () => {
         data: { userId: 'user-new' },
       });
       const { token } = res.body as { token: string };
-      expect(app.get(SessionTokenService).verify(token)).toBe('user-new');
+      expect(app.get(SessionTokenService).verify(token)?.userId).toBe(
+        'user-new',
+      );
 
       const setCookie = String(res.headers['set-cookie'] ?? '');
       expect(setCookie).toContain(`${ANON_ID_COOKIE}=;`);
