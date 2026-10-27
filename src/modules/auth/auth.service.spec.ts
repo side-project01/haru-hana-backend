@@ -14,6 +14,10 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
   let answerUpdateMany: jest.Mock;
   let pickUpdateMany: jest.Mock;
   let userUpdate: jest.Mock;
+  let answerDeleteMany: jest.Mock;
+  let pickDeleteMany: jest.Mock;
+  let userDeleteMany: jest.Mock;
+  let transaction: jest.Mock;
 
   const existingUser = { id: 'user-1', googleSub: 'sub-1' };
   const newUser = { id: 'user-new', googleSub: 'sub-1' };
@@ -27,21 +31,31 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
     answerUpdateMany = jest.fn().mockResolvedValue({ count: 3 });
     pickUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
     userUpdate = jest.fn().mockResolvedValue(existingUser);
+    answerDeleteMany = jest.fn().mockResolvedValue({ count: 3 });
+    pickDeleteMany = jest.fn().mockResolvedValue({ count: 1 });
+    userDeleteMany = jest.fn().mockResolvedValue({ count: 1 });
 
     const tx = {
       user: { create: userCreate },
       answer: { updateMany: answerUpdateMany },
       otherAnswerPick: { updateMany: pickUpdateMany },
     };
+    // 콜백형은 tx로 실행하고, 배열형은 이미 만들어진 쿼리(Promise)를 모두 기다린다.
+    transaction = jest.fn((arg: unknown) =>
+      Array.isArray(arg)
+        ? Promise.all(arg)
+        : (arg as (client: typeof tx) => Promise<unknown>)(tx),
+    );
     const prisma = {
       user: {
         findUnique: userFindUnique,
         findUniqueOrThrow: userFindUniqueOrThrow,
         update: userUpdate,
+        deleteMany: userDeleteMany,
       },
-      answer: { findFirst: answerFindFirst },
-      otherAnswerPick: { findFirst: pickFindFirst },
-      $transaction: (fn: (client: typeof tx) => Promise<unknown>) => fn(tx),
+      answer: { findFirst: answerFindFirst, deleteMany: answerDeleteMany },
+      otherAnswerPick: { findFirst: pickFindFirst, deleteMany: pickDeleteMany },
+      $transaction: transaction,
     } as unknown as PrismaService;
 
     service = new AuthService(prisma);
@@ -143,6 +157,25 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
         where: { id: 'user-1' },
         data: { sessionsRevokedAt: now },
       });
+    });
+  });
+
+  describe('탈퇴', () => {
+    it('답변·배정·계정을 한 트랜잭션에서 모두 지운다', async () => {
+      await service.deleteAccount('user-1');
+
+      expect(answerDeleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
+      expect(pickDeleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
+      expect(userDeleteMany).toHaveBeenCalledWith({ where: { id: 'user-1' } });
+      expect(transaction).toHaveBeenCalledWith(
+        [answerDeleteMany, pickDeleteMany, userDeleteMany].map(
+          (deleteMany) => deleteMany.mock.results[0].value as unknown,
+        ),
+      );
     });
   });
 });

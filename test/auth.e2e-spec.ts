@@ -44,7 +44,10 @@ describe('로그인 (e2e)', () => {
     };
     app = await createTestApp(
       {
-        user: { findUnique: userFindUnique },
+        user: {
+          findUnique: userFindUnique,
+          deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
         question: { findFirst: jest.fn().mockResolvedValue(null) },
         answer: {
           findUnique: jest.fn().mockResolvedValue(null),
@@ -56,7 +59,11 @@ describe('로그인 (e2e)', () => {
           findFirst: jest.fn().mockResolvedValue(null),
           deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         },
-        $transaction: (fn: (client: typeof tx) => Promise<unknown>) => fn(tx),
+        // 콜백형은 tx로 실행하고, 배열형은 이미 만들어진 쿼리(Promise)를 모두 기다린다.
+        $transaction: (arg: unknown) =>
+          Array.isArray(arg)
+            ? Promise.all(arg)
+            : (arg as (client: typeof tx) => Promise<unknown>)(tx),
       },
       { verify: verifyGoogle },
     );
@@ -169,6 +176,19 @@ describe('로그인 (e2e)', () => {
         .post('/auth/google')
         .send({ idToken: 'bad' })
         .expect(401);
+    });
+  });
+
+  describe('DELETE /auth/account', () => {
+    it('토큰이 없으면 401', async () => {
+      await request(app.getHttpServer()).delete('/auth/account').expect(401);
+    });
+
+    it('유효한 토큰이면 204', async () => {
+      await request(app.getHttpServer())
+        .delete('/auth/account')
+        .set('Authorization', bearer(app, 'user-1'))
+        .expect(204);
     });
   });
 });

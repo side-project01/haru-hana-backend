@@ -101,6 +101,7 @@ export class CreateAnswerDto {
 - 입력은 전부 ValidationPipe로 검증(5장).
 - **금칙어 필터(P6)**: 답변 제출 시 서버에서 금칙어 검사 후 차단. `common/`의 필터 서비스로 분리.
 - **로그인(P2)**: Google 로그인 필수. 앱이 Credential Manager로 받은 ID 토큰을 `POST /auth/google`로 보내면 서버가 `google-auth-library`로 검증(audience=`GOOGLE_CLIENT_ID`)하고 **Bearer 세션 토큰**을 발급한다. 전역 `AuthGuard`(APP_GUARD)가 `@Public()`이 아닌 전 라우트에서 토큰을 검증하고, 이 사용자 ID가 `Answer.userId`가 된다. User에는 Google `sub`만 저장한다.
+- **탈퇴(P2)**: `DELETE /auth/account`는 답변·배정·User를 한 트랜잭션으로 하드 삭제한다. 세션 무효화는 따로 하지 않는다 — User가 없으면 AuthGuard가 401로 막는다.
 - **익명 데이터 이전(P2)**: 로그인 이전의 `anon_id` 쿠키(HMAC 서명)는 더 이상 발급하지 않는다. 첫 로그인 때 그 쿠키를 검증해 **새 계정에만** 익명 답변·배정을 옮기고 쿠키를 지운다. 이미 있는 계정에 이 기기의 익명 데이터가 있으면 409(`ACCOUNT_EXISTS`)로 로그인을 막는다 — 합치면 하루 1회(P1)·배정 고정(P5)이 깨진다.
 - **레이트리밋**: 트래픽이 늘면 `@nestjs/throttler` 도입(지금은 필수 아님).
 - 로그·에러 응답에 식별자·답변 본문 등 민감정보를 노출하지 않는다(7장).

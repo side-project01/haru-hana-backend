@@ -1,4 +1,12 @@
-import { Body, Controller, HttpCode, Post, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  HttpCode,
+  Post,
+  Req,
+  Res,
+} from '@nestjs/common';
 import {
   ApiConflictResponse,
   ApiNoContentResponse,
@@ -23,7 +31,7 @@ import { GoogleLoginDto } from './dto/google-login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 
 /**
- * 인증 컨트롤러 (P2). Google ID 토큰 검증, 익명 쿠키 읽기·삭제, 세션 토큰 발급·로그아웃을 담당한다.
+ * 인증 컨트롤러 (P2). Google ID 토큰 검증, 익명 쿠키 읽기·삭제, 세션 토큰 발급·로그아웃·탈퇴를 담당한다.
  * 계정·마이그레이션 판단은 AuthService가 한다.
  */
 @ApiTags('auth')
@@ -74,5 +82,16 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: '세션 토큰이 없거나 무효' })
   async logout(@UserId() userId: string): Promise<void> {
     await this.authService.logout(userId);
+  }
+
+  @Delete('account')
+  @HttpCode(204)
+  @ApiOperation({
+    summary: '회원 탈퇴 (계정·답변·타인 답변 배정을 하드 삭제)',
+  })
+  @ApiNoContentResponse({ description: '탈퇴 완료' })
+  @ApiUnauthorizedResponse({ description: '세션 토큰이 없거나 무효' })
+  async deleteAccount(@UserId() userId: string): Promise<void> {
+    await this.authService.deleteAccount(userId);
   }
 }

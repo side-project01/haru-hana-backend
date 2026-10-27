@@ -87,6 +87,7 @@ sequenceDiagram
 - **전역 `AuthGuard`(APP_GUARD)** 가 `@Public()`이 아닌 전 라우트에서 `Authorization: Bearer`를 검증하고 `request.userId`를 채운다. 컨트롤러는 `@UserId()`로 받는다. 매 요청 응답 헤더 `X-Session-Token`으로 새 토큰을 내려 만료를 "마지막 이용 + 365일"로 민다.
 - 가드는 서명 검증 뒤 `User`를 한 번 조회해, 계정이 없거나(탈퇴) 로그아웃(`sessionsRevokedAt`) 전에 발급된 토큰이면 401로 막는다. 이 때문에 요청마다 DB 왕복이 1건 더 든다.
 - 로그아웃 `POST /auth/logout`(204): `sessionsRevokedAt`을 지금으로 기록해 이 계정에 지금까지 발급된 토큰을 모두 무효화한다. 발급 시각은 토큰에 없으므로 `만료 시각 − 365일`로 되돌려 구한다 — TTL을 바꾸면 이 계산도 함께 봐야 한다.
+- 회원 탈퇴 `DELETE /auth/account`(204): 내 답변·내가 받은 타인 답변 배정·계정(`googleSub` 포함)을 한 트랜잭션으로 **하드 삭제**한다. 계정이 사라지므로 가드가 남은 토큰을 모두 401로 막는다. 내 답변을 배정받았던 다른 사용자의 배정은 FK CASCADE로 함께 지워져, 같은 날 다시 조회하면 재추첨된다(앱은 받은 답변을 그날 기기에 저장해 두므로 이미 받은 사본은 그날까지 남을 수 있다). 같은 Google 계정으로 재가입하면 새 계정이 된다.
 - 가드 등록은 `AuthModule`의 provider로 한다. `useGlobalGuards()`를 쓰지 않는다 — 진입점이 `main.ts`·`api/index.ts` 둘이라 한쪽만 고치면 조용히 어긋난다.
 - `@Public()`: `POST /auth/google`, `GET /cron/purge-answers`(CRON_SECRET 가드로 인증).
 
