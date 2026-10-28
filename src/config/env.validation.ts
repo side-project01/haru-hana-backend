@@ -34,6 +34,38 @@ export const envSchema = z.object({
   /** Vercel Cron 호출 인증 시크릿. Vercel이 `Authorization: Bearer <값>`으로 보낸다. */
   CRON_SECRET: z.string().min(1, 'CRON_SECRET는 비어 있을 수 없습니다'),
 
+  /**
+   * FCM 발송용 Firebase 서비스 계정 키(JSON 문자열) → firebase-admin `cert()`에 넘길 객체로 변환.
+   * Firebase 콘솔 → 프로젝트 설정 → 서비스 계정 → "새 비공개 키 생성"으로 받은 파일 내용이다.
+   * 첫 발송(매일 12시)까지 기다리지 않고 부팅 때 형식 오류를 드러낸다. 비밀값이라 에러 메시지에 값을 싣지 않는다.
+   */
+  FIREBASE_SERVICE_ACCOUNT: z
+    .string()
+    .min(1, 'FIREBASE_SERVICE_ACCOUNT는 비어 있을 수 없습니다')
+    .transform((value, ctx): unknown => {
+      try {
+        return JSON.parse(value);
+      } catch {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'FIREBASE_SERVICE_ACCOUNT가 올바른 JSON이 아닙니다',
+        });
+        return z.NEVER;
+      }
+    })
+    .pipe(
+      z.object({
+        project_id: z.string().min(1),
+        client_email: z.string().min(1),
+        private_key: z.string().min(1),
+      }),
+    )
+    .transform((key) => ({
+      projectId: key.project_id,
+      clientEmail: key.client_email,
+      privateKey: key.private_key,
+    })),
+
   /** CORS 허용 오리진(콤마 구분) → 문자열 배열로 변환 */
   CORS_ORIGINS: z
     .string()

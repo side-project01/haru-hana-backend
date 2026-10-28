@@ -86,10 +86,10 @@ sequenceDiagram
 - 세션 토큰 형식: `<userId>.<만료ms>.<base64url HMAC(AUTH_TOKEN_SECRET)>`. 365일 유효하다.
 - **전역 `AuthGuard`(APP_GUARD)** 가 `@Public()`이 아닌 전 라우트에서 `Authorization: Bearer`를 검증하고 `request.userId`를 채운다. 컨트롤러는 `@UserId()`로 받는다. 매 요청 응답 헤더 `X-Session-Token`으로 새 토큰을 내려 만료를 "마지막 이용 + 365일"로 민다.
 - 가드는 서명 검증 뒤 `User`를 한 번 조회해, 계정이 없거나(탈퇴) 로그아웃(`sessionsRevokedAt`) 전에 발급된 토큰이면 401로 막는다. 이 때문에 요청마다 DB 왕복이 1건 더 든다.
-- 로그아웃 `POST /auth/logout`(204): `sessionsRevokedAt`을 지금으로 기록해 이 계정에 지금까지 발급된 토큰을 모두 무효화한다. 발급 시각은 토큰에 없으므로 `만료 시각 − 365일`로 되돌려 구한다 — TTL을 바꾸면 이 계산도 함께 봐야 한다.
-- 회원 탈퇴 `DELETE /auth/account`(204): 내 답변·내가 받은 타인 답변 배정·계정(`googleSub` 포함)을 한 트랜잭션으로 **하드 삭제**한다. 계정이 사라지므로 가드가 남은 토큰을 모두 401로 막는다. 내 답변을 배정받았던 다른 사용자의 배정은 FK CASCADE로 함께 지워져, 같은 날 다시 조회하면 재추첨된다(앱은 받은 답변을 그날 기기에 저장해 두므로 이미 받은 사본은 그날까지 남을 수 있다). 같은 Google 계정으로 재가입하면 새 계정이 된다.
+- 로그아웃 `POST /auth/logout`(204): `sessionsRevokedAt`을 지금으로 기록해 이 계정에 지금까지 발급된 토큰을 모두 무효화한다. 발급 시각은 토큰에 없으므로 `만료 시각 − 365일`로 되돌려 구한다 — TTL을 바꾸면 이 계산도 함께 봐야 한다. 모든 기기의 로그인이 끊기므로 계정의 알림 토큰도 함께 지운다.
+- 회원 탈퇴 `DELETE /auth/account`(204): 내 답변·내가 받은 타인 답변 배정·알림 토큰·계정(`googleSub` 포함)을 한 트랜잭션으로 **하드 삭제**한다. 계정이 사라지므로 가드가 남은 토큰을 모두 401로 막는다. 내 답변을 배정받았던 다른 사용자의 배정은 FK CASCADE로 함께 지워져, 같은 날 다시 조회하면 재추첨된다(앱은 받은 답변을 그날 기기에 저장해 두므로 이미 받은 사본은 그날까지 남을 수 있다). 같은 Google 계정으로 재가입하면 새 계정이 된다.
 - 가드 등록은 `AuthModule`의 provider로 한다. `useGlobalGuards()`를 쓰지 않는다 — 진입점이 `main.ts`·`api/index.ts` 둘이라 한쪽만 고치면 조용히 어긋난다.
-- `@Public()`: `POST /auth/google`, `GET /cron/purge-answers`(CRON_SECRET 가드로 인증).
+- `@Public()`: `POST /auth/google`, `GET /cron/purge-answers`·`GET /cron/notify-question`(CRON_SECRET 가드로 인증).
 
 ### 2. 오늘의 질문 — P3 (`modules/questions`)
 
@@ -179,6 +179,16 @@ flowchart LR
 - 달 범위는 `getServiceMonthRange`(serviceDate `start` 이상 `end` 미만)로 계산한다. 날짜 계산을 유틸 밖에 두지 않는다.
 - 그 달에 답변이 없으면 `{ "answers": [] }`. `month` 형식이 틀리면 400.
 
+### 6. 오늘의 질문 알림 — FCM (`modules/push`)
+
+앱이 기기의 FCM 토큰을 등록해 두면, Vercel Cron이 매일 12시(KST, `0 3 * * *` UTC) `GET /cron/notify-question`을 불러 알림을 보낸다.
+
+- `PUT /push/token`(204): 이 기기의 토큰을 내 계정에 등록한다(토큰 기준 upsert). 앱이 실행될 때마다 불러 `updatedAt`을 갱신한다. 같은 기기가 다른 계정으로 로그인하면 새 계정으로 옮겨진다.
+- `DELETE /push/token`(204): 이 기기의 토큰을 지운다(알림 끄기). 내 토큰만 지운다.
+- 발송: 제목 "오늘의 질문이 도착했어요", 내용은 그날 질문 본문. 오늘 질문이 없으면 보내지 않고, 오늘 이미 답변한 사용자는 뺀다. 500개씩 나눠 보낸다(FCM 멀티캐스트 한도).
+- 토큰 정리: 세션 TTL(365일) 넘게 갱신되지 않은 토큰(로그인이 끊긴 기기)과 FCM이 무효라고 답한 토큰(앱 삭제 등)을 지운다. 로그아웃·탈퇴 때는 계정의 토큰을 모두 지운다.
+- 발송은 `FcmSender`(firebase-admin 래퍼)만 거치므로 테스트에서는 이것만 mock 한다.
+
 ## 데이터 모델 (`prisma/schema.prisma`)
 
 | 모델              | 용도                      | 핵심 필드                                                                                                                             |
@@ -187,6 +197,7 @@ flowchart LR
 | `Question`        | 오늘의 질문 (P3)          | `body` · `displayDate`(@unique, serviceDate 매칭 키) · `active`                                                                       |
 | `Answer`          | 답변 (P1 · P4)            | `userId` · `questionId` · `content` · `bgType`/`bgValue` · `serviceDate`<br/>`@@unique([userId, serviceDate])`로 하루 1회를 DB가 강제 |
 | `OtherAnswerPick` | 타인 답변 배정 (P5)       | `userId` · `questionId` · `answerId`<br/>`@@unique([userId, questionId])`로 고정 노출을 DB가 강제                                     |
+| `PushToken`       | 알림용 FCM 기기 토큰      | `token`(@id) · `userId` · `updatedAt`(앱 실행마다 갱신, 오래되면 정리)                                                                |
 
 > `userId`는 `User.id`를 **외래키가 아닌 문자열로** 참조한다. 아직 계정으로 옮겨지지 않은 익명 시절 데이터가 anonId 값으로 남아 있을 수 있기 때문이다(보유 기간이 지나면 cron이 지운다).
 
@@ -197,13 +208,15 @@ flowchart LR
 
 `config/env.validation.ts`가 Zod로 검증하며 누락/오류 시 **즉시 종료(fail-fast)**한다.
 
-| 변수                | 용도                                                                                            |
-| ------------------- | ----------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`      | 런타임 DB 연결(pooled)                                                                          |
-| `DIRECT_URL`        | 마이그레이션용 직접 연결                                                                        |
-| `COOKIE_SECRET`     | 기존 anon_id 쿠키 HMAC 검증 키 (P2). **기존 값 유지** — 바꾸면 미이전 기기의 쿠키가 무효가 된다 |
-| `AUTH_TOKEN_SECRET` | 세션 토큰 HMAC 서명 키 (P2)                                                                     |
-| `GOOGLE_CLIENT_ID`  | Google OAuth 웹 클라이언트 ID — ID 토큰 audience (P2)                                           |
-| `CORS_ORIGINS`      | CORS 허용 오리진 화이트리스트                                                                   |
-| `NODE_ENV`          | 실행 환경                                                                                       |
-| `PORT`              | 로컬 개발 포트                                                                                  |
+| 변수                       | 용도                                                                                            |
+| -------------------------- | ----------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`             | 런타임 DB 연결(pooled)                                                                          |
+| `DIRECT_URL`               | 마이그레이션용 직접 연결                                                                        |
+| `COOKIE_SECRET`            | 기존 anon_id 쿠키 HMAC 검증 키 (P2). **기존 값 유지** — 바꾸면 미이전 기기의 쿠키가 무효가 된다 |
+| `AUTH_TOKEN_SECRET`        | 세션 토큰 HMAC 서명 키 (P2)                                                                     |
+| `GOOGLE_CLIENT_ID`         | Google OAuth 웹 클라이언트 ID — ID 토큰 audience (P2)                                           |
+| `CRON_SECRET`              | Vercel Cron 호출 인증 시크릿 (`Authorization: Bearer`)                                          |
+| `FIREBASE_SERVICE_ACCOUNT` | FCM 발송용 Firebase 서비스 계정 키(JSON). 비밀값                                                |
+| `CORS_ORIGINS`             | CORS 허용 오리진 화이트리스트                                                                   |
+| `NODE_ENV`                 | 실행 환경                                                                                       |
+| `PORT`                     | 로컬 개발 포트                                                                                  |

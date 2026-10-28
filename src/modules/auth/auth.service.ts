@@ -59,14 +59,18 @@ export class AuthService {
    * @param now 로그아웃 시각. 테스트에서 고정하려고 받는다
    */
   async logout(userId: string, now: Date = new Date()): Promise<void> {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { sessionsRevokedAt: now },
-    });
+    // 모든 기기의 로그인이 끊기므로 모든 기기의 알림 토큰도 지운다.
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { sessionsRevokedAt: now },
+      }),
+      this.prisma.pushToken.deleteMany({ where: { userId } }),
+    ]);
   }
 
   /**
-   * 계정을 탈퇴한다(하드 삭제). 답변·배정·계정을 한 트랜잭션으로 지운다.
+   * 계정을 탈퇴한다(하드 삭제). 답변·배정·알림 토큰·계정을 한 트랜잭션으로 지운다.
    * 계정이 사라지면 AuthGuard가 남은 세션 토큰을 모두 401로 막으므로 따로 무효화하지 않는다.
    * - 내 답변을 가리키던 타인의 배정은 FK CASCADE로 함께 지워진다(P5 고정이 풀려 재추첨될 수 있다).
    * - 계정은 deleteMany로 지운다. 동시 탈퇴 요청이 둘 다 가드를 통과해도 두 번째가 500 없이 끝난다.
@@ -76,6 +80,7 @@ export class AuthService {
     const [answers, picks] = await this.prisma.$transaction([
       this.prisma.answer.deleteMany({ where: { userId } }),
       this.prisma.otherAnswerPick.deleteMany({ where: { userId } }),
+      this.prisma.pushToken.deleteMany({ where: { userId } }),
       this.prisma.user.deleteMany({ where: { id: userId } }),
     ]);
 

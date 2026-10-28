@@ -8,6 +8,9 @@
       "maxDuration": 15
     }
   },
-  "crons": [{ "path": "/cron/purge-answers", "schedule": "0 18 * * *" }],
+  "crons": [
+    { "path": "/cron/purge-answers", "schedule": "0 18 * * *" },
+    { "path": "/cron/notify-question", "schedule": "0 3 * * *" }
+  ],
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }

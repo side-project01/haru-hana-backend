@@ -17,6 +17,7 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
   let answerDeleteMany: jest.Mock;
   let pickDeleteMany: jest.Mock;
   let userDeleteMany: jest.Mock;
+  let pushTokenDeleteMany: jest.Mock;
   let transaction: jest.Mock;
 
   const existingUser = { id: 'user-1', googleSub: 'sub-1' };
@@ -34,6 +35,7 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
     answerDeleteMany = jest.fn().mockResolvedValue({ count: 3 });
     pickDeleteMany = jest.fn().mockResolvedValue({ count: 1 });
     userDeleteMany = jest.fn().mockResolvedValue({ count: 1 });
+    pushTokenDeleteMany = jest.fn().mockResolvedValue({ count: 2 });
 
     const tx = {
       user: { create: userCreate },
@@ -55,6 +57,7 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
       },
       answer: { findFirst: answerFindFirst, deleteMany: answerDeleteMany },
       otherAnswerPick: { findFirst: pickFindFirst, deleteMany: pickDeleteMany },
+      pushToken: { deleteMany: pushTokenDeleteMany },
       $transaction: transaction,
     } as unknown as PrismaService;
 
@@ -158,10 +161,23 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
         data: { sessionsRevokedAt: now },
       });
     });
+
+    it('모든 기기의 로그인이 끊기므로 계정의 알림 토큰도 같은 트랜잭션에서 지운다', async () => {
+      await service.logout('user-1', new Date('2026-10-27T00:00:00Z'));
+
+      expect(pushTokenDeleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
+      expect(transaction).toHaveBeenCalledWith(
+        [userUpdate, pushTokenDeleteMany].map(
+          (query) => query.mock.results[0].value as unknown,
+        ),
+      );
+    });
   });
 
   describe('탈퇴', () => {
-    it('답변·배정·계정을 한 트랜잭션에서 모두 지운다', async () => {
+    it('답변·배정·알림 토큰·계정을 한 트랜잭션에서 모두 지운다', async () => {
       await service.deleteAccount('user-1');
 
       expect(answerDeleteMany).toHaveBeenCalledWith({
@@ -170,11 +186,17 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
       expect(pickDeleteMany).toHaveBeenCalledWith({
         where: { userId: 'user-1' },
       });
+      expect(pushTokenDeleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
       expect(userDeleteMany).toHaveBeenCalledWith({ where: { id: 'user-1' } });
       expect(transaction).toHaveBeenCalledWith(
-        [answerDeleteMany, pickDeleteMany, userDeleteMany].map(
-          (deleteMany) => deleteMany.mock.results[0].value as unknown,
-        ),
+        [
+          answerDeleteMany,
+          pickDeleteMany,
+          pushTokenDeleteMany,
+          userDeleteMany,
+        ].map((deleteMany) => deleteMany.mock.results[0].value as unknown),
       );
     });
   });

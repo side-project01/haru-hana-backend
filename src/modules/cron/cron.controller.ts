@@ -2,6 +2,7 @@ import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { Public } from '../../common/auth/public.decorator';
 import { AnswersService } from '../answers/answers.service';
+import { PushService, type NotifyResult } from '../push/push.service';
 import { CronSecretGuard } from './cron-secret.guard';
 
 /**
@@ -13,10 +14,18 @@ import { CronSecretGuard } from './cron-secret.guard';
 @UseGuards(CronSecretGuard)
 @Controller('cron')
 export class CronController {
-  constructor(private readonly answersService: AnswersService) {}
+  constructor(
+    private readonly answersService: AnswersService,
+    private readonly pushService: PushService,
+  ) {}
 
   @Get('purge-answers')
   purgeAnswers(): Promise<{ answers: number; picks: number }> {
     return this.answersService.purgeInactive();
+  }
+
+  @Get('notify-question')
+  notifyQuestion(): Promise<NotifyResult> {
+    return this.pushService.notifyTodayQuestion();
   }
 }

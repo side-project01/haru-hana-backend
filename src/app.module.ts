@@ -6,6 +6,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { QuestionsModule } from './modules/questions/questions.module';
 import { AnswersModule } from './modules/answers/answers.module';
 import { CronModule } from './modules/cron/cron.module';
+import { PushModule } from './modules/push/push.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { CronModule } from './modules/cron/cron.module';
     AuthModule, // 전역 로그인 가드(APP_GUARD) 포함
     QuestionsModule,
     AnswersModule,
+    PushModule,
     CronModule,
   ],
 })

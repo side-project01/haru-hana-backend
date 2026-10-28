@@ -80,3 +80,13 @@ model OtherAnswerPick {
   @@unique([userId, questionId]) // 사용자·질문당 배정 1건을 DB 레벨에서 강제 (P1의 하루1회와 같은 방식)
   @@index([answerId])
 }
+
+// FCM 기기 토큰 (오늘의 질문 알림). 기기 1대 = 토큰 1개, 사용자 1명은 여러 기기를 가질 수 있다.
+model PushToken {
+  token     String   @id
+  userId    String // User.id. Answer.userId처럼 FK 없는 문자열
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt // 앱 실행마다 재등록으로 갱신. 세션 TTL 넘게 멈추면 로그인이 끊긴 기기로 보고 지운다
+
+  @@index([userId])
+}

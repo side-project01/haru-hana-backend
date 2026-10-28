@@ -101,7 +101,7 @@ export class CreateAnswerDto {
 - 입력은 전부 ValidationPipe로 검증(5장).
 - **금칙어 필터(P6)**: 답변 제출 시 서버에서 금칙어 검사 후 차단. `common/`의 필터 서비스로 분리.
 - **로그인(P2)**: Google 로그인 필수. 앱이 Credential Manager로 받은 ID 토큰을 `POST /auth/google`로 보내면 서버가 `google-auth-library`로 검증(audience=`GOOGLE_CLIENT_ID`)하고 **Bearer 세션 토큰**을 발급한다. 전역 `AuthGuard`(APP_GUARD)가 `@Public()`이 아닌 전 라우트에서 토큰을 검증하고, 이 사용자 ID가 `Answer.userId`가 된다. User에는 Google `sub`만 저장한다.
-- **탈퇴(P2)**: `DELETE /auth/account`는 답변·배정·User를 한 트랜잭션으로 하드 삭제한다. 세션 무효화는 따로 하지 않는다 — User가 없으면 AuthGuard가 401로 막는다.
+- **탈퇴(P2)**: `DELETE /auth/account`는 답변·배정·알림 토큰·User를 한 트랜잭션으로 하드 삭제한다. 세션 무효화는 따로 하지 않는다 — User가 없으면 AuthGuard가 401로 막는다.
 - **익명 데이터 이전(P2)**: 로그인 이전의 `anon_id` 쿠키(HMAC 서명)는 더 이상 발급하지 않는다. 첫 로그인 때 그 쿠키를 검증해 **새 계정에만** 익명 답변·배정을 옮기고 쿠키를 지운다. 이미 있는 계정에 이 기기의 익명 데이터가 있으면 409(`ACCOUNT_EXISTS`)로 로그인을 막는다 — 합치면 하루 1회(P1)·배정 고정(P5)이 깨진다.
 - **레이트리밋**: 트래픽이 늘면 `@nestjs/throttler` 도입(지금은 필수 아님).
 - 로그·에러 응답에 식별자·답변 본문 등 민감정보를 노출하지 않는다(7장).
@@ -201,8 +201,8 @@ src/common/
 - 콜드스타트와 혼동하지 말 것. 연속 호출이 **전부** 느리면 콜드스타트가 아니라 요청당 비용이다.
 
 **설정 파일**
-- `vercel.json`: `buildCommand`에 `prisma generate` 포함(node_modules 캐시로 인한 stale 클라이언트 방지), `regions`로 함수 리전 고정(위 참조), `crons`로 매일 03:00 KST(`0 18 * * *` UTC)에 `/cron/purge-answers` 호출(마지막 답변 후 365일 지난 사용자의 답변 삭제), 전 요청을 `/api`로 rewrite.
-- 환경변수(`DATABASE_URL`·`COOKIE_SECRET`·`AUTH_TOKEN_SECRET`·`GOOGLE_CLIENT_ID`·`CRON_SECRET`·`CORS_ORIGINS`·`NODE_ENV`)는 Vercel 대시보드에 등록. `COOKIE_SECRET`은 기존 값을 유지한다 — 바꾸면 아직 이전하지 않은 기기의 익명 쿠키가 전부 무효가 된다. `env.validation.ts`가 fail-fast라 누락 시 콜드스타트에서 즉시 실패한다.
+- `vercel.json`: `buildCommand`에 `prisma generate` 포함(node_modules 캐시로 인한 stale 클라이언트 방지), `regions`로 함수 리전 고정(위 참조), `crons`로 매일 03:00 KST(`0 18 * * *` UTC)에 `/cron/purge-answers` 호출(마지막 답변 후 365일 지난 사용자의 답변 삭제), 매일 12:00 KST(`0 3 * * *` UTC)에 `/cron/notify-question` 호출(오늘의 질문 알림, Hobby 플랜이라 그 시간대 안 아무 때나 실행될 수 있다), 전 요청을 `/api`로 rewrite.
+- 환경변수(`DATABASE_URL`·`COOKIE_SECRET`·`AUTH_TOKEN_SECRET`·`GOOGLE_CLIENT_ID`·`CRON_SECRET`·`FIREBASE_SERVICE_ACCOUNT`·`CORS_ORIGINS`·`NODE_ENV`)는 Vercel 대시보드에 등록. `COOKIE_SECRET`은 기존 값을 유지한다 — 바꾸면 아직 이전하지 않은 기기의 익명 쿠키가 전부 무효가 된다. `env.validation.ts`가 fail-fast라 누락 시 콜드스타트에서 즉시 실패한다.
 
 **날짜(P7) 주의**
 - Vercel 함수는 UTC로 실행된다. `service-date.util`은 로컬 타임존 게터를 쓰지 않고 UTC epoch + 고정 KST 오프셋으로 계산하므로 안전 — 이 불변식을 깨지 않는다(로컬 `getHours`/`getFullYear` 등 사용 금지, `getUTC*`·`Date.UTC`만).
