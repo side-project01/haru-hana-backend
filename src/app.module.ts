@@ -7,6 +7,7 @@ import { QuestionsModule } from './modules/questions/questions.module';
 import { AnswersModule } from './modules/answers/answers.module';
 import { CronModule } from './modules/cron/cron.module';
 import { PushModule } from './modules/push/push.module';
+import { TermsModule } from './modules/terms/terms.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PushModule } from './modules/push/push.module';
     }),
     PrismaModule,
     AuthModule, // 전역 로그인 가드(APP_GUARD) 포함
+    TermsModule,
     QuestionsModule,
     AnswersModule,
     PushModule,

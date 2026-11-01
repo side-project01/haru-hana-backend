@@ -76,6 +76,15 @@ export const envSchema = z.object({
         .map((origin) => origin.trim())
         .filter((origin) => origin.length > 0),
     ),
+
+  /**
+   * 약관 미동의 사용자 차단 스위치. `true`면 동의 전 사용자의 요청을 403(TERMS_REQUIRED)으로 막는다.
+   * 약관 화면이 없는 구버전 앱이 바로 멈추지 않도록 기본은 끈다. 대부분 업데이트한 뒤 켠다.
+   */
+  TERMS_ENFORCEMENT: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
 });
 
 /** 검증·변환을 거친 환경설정 타입 */

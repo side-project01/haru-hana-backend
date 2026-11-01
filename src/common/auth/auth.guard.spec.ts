@@ -1,13 +1,26 @@
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
+import type { EnvConfig } from '../../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthGuard } from './auth.guard';
 import { SessionTokenService } from './session-token.service';
-import { RequestWithUserId, SESSION_TOKEN_HEADER } from './auth.constants';
+import {
+  IS_PUBLIC_KEY,
+  RequestWithUserId,
+  SESSION_TOKEN_HEADER,
+  TERMS_REQUIRED_CODE,
+} from './auth.constants';
 
 describe('AuthGuard (P2 — 로그인 필수)', () => {
   let guard: AuthGuard;
   let isPublic: boolean;
+  let isTermsExempt: boolean;
+  let termsEnforced: boolean;
   let verify: jest.Mock;
   let sign: jest.Mock;
   let setHeader: jest.Mock;
@@ -35,18 +48,24 @@ describe('AuthGuard (P2 — 로그인 필수)', () => {
 
   beforeEach(() => {
     isPublic = false;
+    isTermsExempt = false;
+    termsEnforced = false;
     verify = jest.fn().mockReturnValue({ userId: 'user-1', issuedAt });
     sign = jest.fn().mockReturnValue('renewed-token');
     setHeader = jest.fn();
-    userFindUnique = jest.fn().mockResolvedValue({ sessionsRevokedAt: null });
+    userFindUnique = jest
+      .fn()
+      .mockResolvedValue({ sessionsRevokedAt: null, termsAgreedAt: null });
     const reflector = {
-      getAllAndOverride: () => isPublic,
+      getAllAndOverride: (key: string) =>
+        key === IS_PUBLIC_KEY ? isPublic : isTermsExempt,
     } as unknown as Reflector;
 
     guard = new AuthGuard(
       reflector,
       { verify, sign } as unknown as SessionTokenService,
       { user: { findUnique: userFindUnique } } as unknown as PrismaService,
+      { get: () => termsEnforced } as unknown as ConfigService<EnvConfig, true>,
     );
   });
 
@@ -98,7 +117,10 @@ describe('AuthGuard (P2 — 로그인 필수)', () => {
   });
 
   it('로그아웃 시각까지 발급된 토큰은 401', async () => {
-    userFindUnique.mockResolvedValue({ sessionsRevokedAt: issuedAt });
+    userFindUnique.mockResolvedValue({
+      sessionsRevokedAt: issuedAt,
+      termsAgreedAt: null,
+    });
 
     await expect(run('Bearer good-token')).rejects.toThrow(
       UnauthorizedException,
@@ -109,10 +131,63 @@ describe('AuthGuard (P2 — 로그인 필수)', () => {
   it('로그아웃 뒤에 발급된 토큰은 통과한다(다시 로그인)', async () => {
     userFindUnique.mockResolvedValue({
       sessionsRevokedAt: new Date(issuedAt.getTime() - 1),
+      termsAgreedAt: null,
     });
 
     const request = await run('Bearer good-token');
 
     expect(request.userId).toBe('user-1');
+  });
+
+  describe('약관 동의 차단 (TERMS_ENFORCEMENT)', () => {
+    it('스위치가 꺼져 있으면 미동의 사용자도 통과한다', async () => {
+      const request = await run('Bearer good-token');
+
+      expect(request.userId).toBe('user-1');
+    });
+
+    it('스위치가 켜져 있으면 미동의 사용자는 403 TERMS_REQUIRED, 토큰도 재발급하지 않는다', async () => {
+      termsEnforced = true;
+
+      const error: unknown = await run('Bearer good-token').catch(
+        (e: unknown) => e,
+      );
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect((error as ForbiddenException).getResponse()).toMatchObject({
+        code: TERMS_REQUIRED_CODE,
+      });
+      expect(setHeader).not.toHaveBeenCalled();
+    });
+
+    it('스위치가 켜져 있어도 @TermsExempt() 라우트는 미동의 사용자를 통과시킨다', async () => {
+      termsEnforced = true;
+      isTermsExempt = true;
+
+      const request = await run('Bearer good-token');
+
+      expect(request.userId).toBe('user-1');
+    });
+
+    it('스위치가 켜져 있어도 동의한 사용자는 통과한다', async () => {
+      termsEnforced = true;
+      userFindUnique.mockResolvedValue({
+        sessionsRevokedAt: null,
+        termsAgreedAt: issuedAt,
+      });
+
+      const request = await run('Bearer good-token');
+
+      expect(request.userId).toBe('user-1');
+    });
+
+    it('미동의여도 토큰이 무효면 403이 아니라 401', async () => {
+      termsEnforced = true;
+      verify.mockReturnValue(null);
+
+      await expect(run('Bearer bad-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
   });
 });

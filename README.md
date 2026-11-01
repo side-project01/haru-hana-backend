@@ -36,12 +36,13 @@ src/
 ├─ config/          # env.validation.ts (Zod, fail-fast)
 ├─ common/
 │  ├─ prisma/       # PrismaService (전역)
-│  ├─ auth/         # 세션 토큰 · 전역 AuthGuard · @Public · @UserId (P2)
+│  ├─ auth/         # 세션 토큰 · 전역 AuthGuard · @Public · @TermsExempt · @UserId (P2)
 │  ├─ identity/     # 기존 익명 쿠키 검증 — 첫 로그인 데이터 이전용 (P2)
 │  ├─ date/         # serviceDate 유틸 (P7)
 │  └─ moderation/   # 금칙어 필터 (P6)
 └─ modules/
    ├─ auth/         # Google 로그인 · 익명 데이터 이전 (P2)
+   ├─ terms/        # 약관 동의 조회·기록
    ├─ questions/    # 오늘의 질문 (P3)
    └─ answers/      # 답변 제출·조회, 타인 답변 (P1 · P4 · P5 · P6)
 prisma/schema.prisma  # User · Question · Answer · OtherAnswerPick 모델
@@ -85,11 +86,12 @@ sequenceDiagram
 - 익명 `anon_id` 쿠키는 더 이상 발급하지 않는다. `AnonIdService`(COOKIE_SECRET HMAC)는 이전할 때 기존 쿠키를 검증하는 데에만 쓴다.
 - 세션 토큰 형식: `<userId>.<만료ms>.<base64url HMAC(AUTH_TOKEN_SECRET)>`. 365일 유효하다.
 - **전역 `AuthGuard`(APP_GUARD)** 가 `@Public()`이 아닌 전 라우트에서 `Authorization: Bearer`를 검증하고 `request.userId`를 채운다. 컨트롤러는 `@UserId()`로 받는다. 매 요청 응답 헤더 `X-Session-Token`으로 새 토큰을 내려 만료를 "마지막 이용 + 365일"로 민다.
-- 가드는 서명 검증 뒤 `User`를 한 번 조회해, 계정이 없거나(탈퇴) 로그아웃(`sessionsRevokedAt`) 전에 발급된 토큰이면 401로 막는다. 이 때문에 요청마다 DB 왕복이 1건 더 든다.
+- 가드는 서명 검증 뒤 `User`를 한 번 조회해, 계정이 없거나(탈퇴) 로그아웃(`sessionsRevokedAt`) 전에 발급된 토큰이면 401로 막는다. 이 때문에 요청마다 DB 왕복이 1건 더 든다. 같은 조회에서 약관 동의 여부(`termsAgreedAt`)도 읽는다(7절).
 - 로그아웃 `POST /auth/logout`(204): `sessionsRevokedAt`을 지금으로 기록해 이 계정에 지금까지 발급된 토큰을 모두 무효화한다. 발급 시각은 토큰에 없으므로 `만료 시각 − 365일`로 되돌려 구한다 — TTL을 바꾸면 이 계산도 함께 봐야 한다. 모든 기기의 로그인이 끊기므로 계정의 알림 토큰도 함께 지운다.
 - 회원 탈퇴 `DELETE /auth/account`(204): 내 답변·내가 받은 타인 답변 배정·알림 토큰·계정(`googleSub` 포함)을 한 트랜잭션으로 **하드 삭제**한다. 계정이 사라지므로 가드가 남은 토큰을 모두 401로 막는다. 내 답변을 배정받았던 다른 사용자의 배정은 FK CASCADE로 함께 지워져, 같은 날 다시 조회하면 재추첨된다(앱은 받은 답변을 그날 기기에 저장해 두므로 이미 받은 사본은 그날까지 남을 수 있다). 같은 Google 계정으로 재가입하면 새 계정이 된다.
 - 가드 등록은 `AuthModule`의 provider로 한다. `useGlobalGuards()`를 쓰지 않는다 — 진입점이 `main.ts`·`api/index.ts` 둘이라 한쪽만 고치면 조용히 어긋난다.
 - `@Public()`: `POST /auth/google`, `GET /cron/purge-answers`·`GET /cron/notify-question`(CRON_SECRET 가드로 인증).
+- `@TermsExempt()`: 로그인은 필요하지만 약관 동의 전에도 열린 라우트 — `GET`·`POST /terms/agreement`, `POST /auth/logout`, `DELETE /auth/account`.
 
 ### 2. 오늘의 질문 — P3 (`modules/questions`)
 
@@ -189,11 +191,20 @@ flowchart LR
 - 토큰 정리: 세션 TTL(365일) 넘게 갱신되지 않은 토큰(로그인이 끊긴 기기)과 FCM이 무효라고 답한 토큰(앱 삭제 등)을 지운다. 로그아웃·탈퇴 때는 계정의 토큰을 모두 지운다.
 - 발송은 `FcmSender`(firebase-admin 래퍼)만 거치므로 테스트에서는 이것만 mock 한다.
 
+### 7. 약관 동의 (`modules/terms`)
+
+앱은 로그인 후 실행할 때마다 `GET /terms/agreement`로 동의 여부를 확인하고, 동의하지 않았으면 약관 화면(이용약관·개인정보처리방침)을 띄운다. "시작하기"를 누르면 `POST /terms/agreement`로 기록한다.
+
+- `GET /terms/agreement` → `{ "agreed": boolean }`. 로그인 응답에는 담지 않는다 — 세션 토큰을 365일 갱신하며 쓰므로 기존 사용자는 로그인 API를 다시 부르지 않는다.
+- `POST /terms/agreement`(204): `User.termsAgreedAt`·`termsVersion`(`TERMS_VERSION`, 현재 `2026-11-08`)을 기록한다. 이미 동의했으면 처음 기록을 그대로 두고 204. 다시 동의를 받는 기능은 아직 없다.
+- 동의 기록은 `User`에 있으므로 탈퇴(하드 삭제) 때 계정과 함께 지워진다. 무료 서비스라 거래기록 같은 법정 보존 대상이 없다고 보고 분리 보관하지 않는다.
+- **차단 스위치 `TERMS_ENFORCEMENT`**: `true`면 `AuthGuard`가 미동의 사용자의 요청을 `403 { code: "TERMS_REQUIRED" }`로 막는다(`@TermsExempt()` 라우트 제외). 기본은 `false` — 약관 화면이 없는 구버전 앱이 바로 멈추지 않도록, 새 앱이 충분히 퍼진 뒤 Vercel 환경변수를 바꾸고 재배포해 켠다.
+
 ## 데이터 모델 (`prisma/schema.prisma`)
 
 | 모델              | 용도                      | 핵심 필드                                                                                                                             |
 | ----------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `User`            | Google 로그인 사용자 (P2) | `id`(uuid) · `googleSub`(@unique). 개인정보는 저장하지 않는다                                                                         |
+| `User`            | Google 로그인 사용자 (P2) | `id`(uuid) · `googleSub`(@unique) · `sessionsRevokedAt` · `termsAgreedAt`/`termsVersion`(약관 동의). 개인정보는 저장하지 않는다       |
 | `Question`        | 오늘의 질문 (P3)          | `body` · `displayDate`(@unique, serviceDate 매칭 키) · `active`                                                                       |
 | `Answer`          | 답변 (P1 · P4)            | `userId` · `questionId` · `content` · `bgType`/`bgValue` · `serviceDate`<br/>`@@unique([userId, serviceDate])`로 하루 1회를 DB가 강제 |
 | `OtherAnswerPick` | 타인 답변 배정 (P5)       | `userId` · `questionId` · `answerId`<br/>`@@unique([userId, questionId])`로 고정 노출을 DB가 강제                                     |
@@ -218,5 +229,6 @@ flowchart LR
 | `CRON_SECRET`              | Vercel Cron 호출 인증 시크릿 (`Authorization: Bearer`)                                          |
 | `FIREBASE_SERVICE_ACCOUNT` | FCM 발송용 Firebase 서비스 계정 키(JSON). 비밀값                                                |
 | `CORS_ORIGINS`             | CORS 허용 오리진 화이트리스트                                                                   |
+| `TERMS_ENFORCEMENT`        | `true`면 약관 미동의 사용자를 403으로 막는다. 선택, 기본 `false`                                |
 | `NODE_ENV`                 | 실행 환경                                                                                       |
 | `PORT`                     | 로컬 개발 포트                                                                                  |

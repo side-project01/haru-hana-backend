@@ -18,6 +18,7 @@ import {
 import type { Request, Response } from 'express';
 import { Public } from '../../common/auth/public.decorator';
 import { SessionTokenService } from '../../common/auth/session-token.service';
+import { TermsExempt } from '../../common/auth/terms-exempt.decorator';
 import { UserId } from '../../common/auth/user-id.decorator';
 import { AnonIdService } from '../../common/identity/anon-id.service';
 import {
@@ -73,6 +74,7 @@ export class AuthController {
     return { token: this.sessionToken.sign(user.id) };
   }
 
+  @TermsExempt()
   @Post('logout')
   @HttpCode(204)
   @ApiOperation({
@@ -84,6 +86,7 @@ export class AuthController {
     await this.authService.logout(userId);
   }
 
+  @TermsExempt()
   @Delete('account')
   @HttpCode(204)
   @ApiOperation({

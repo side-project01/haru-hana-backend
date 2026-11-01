@@ -31,6 +31,8 @@ model User {
   id                String    @id @default(uuid())
   googleSub         String    @unique // Google ID 토큰의 sub
   sessionsRevokedAt DateTime? // 로그아웃 시각. 이 시각까지 발급된 세션 토큰은 무효
+  termsAgreedAt     DateTime? // 약관 동의 시각. NULL이면 아직 동의하지 않음
+  termsVersion      String? // 동의한 약관 버전(TERMS_VERSION)
   createdAt         DateTime  @default(now())
 }
 

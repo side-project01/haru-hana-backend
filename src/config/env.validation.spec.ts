@@ -1,5 +1,15 @@
 import { validateEnv } from './env.validation';
 
+const base = {
+  DATABASE_URL: 'postgresql://user:pw@localhost:5432/db',
+  DIRECT_URL: 'postgresql://user:pw@localhost:5432/db',
+  COOKIE_SECRET: 'cookie',
+  AUTH_TOKEN_SECRET: 'auth',
+  GOOGLE_CLIENT_ID: 'client.apps.googleusercontent.com',
+  CRON_SECRET: 'cron',
+  CORS_ORIGINS: 'http://localhost:5173',
+};
+
 describe('validateEnv — FIREBASE_SERVICE_ACCOUNT', () => {
   const serviceAccount = {
     type: 'service_account',
@@ -7,15 +17,6 @@ describe('validateEnv — FIREBASE_SERVICE_ACCOUNT', () => {
     client_email: 'firebase-adminsdk@haru-hana-test.iam.gserviceaccount.com',
     private_key:
       '-----BEGIN PRIVATE KEY-----\nSECRET\n-----END PRIVATE KEY-----\n',
-  };
-  const base = {
-    DATABASE_URL: 'postgresql://user:pw@localhost:5432/db',
-    DIRECT_URL: 'postgresql://user:pw@localhost:5432/db',
-    COOKIE_SECRET: 'cookie',
-    AUTH_TOKEN_SECRET: 'auth',
-    GOOGLE_CLIENT_ID: 'client.apps.googleusercontent.com',
-    CRON_SECRET: 'cron',
-    CORS_ORIGINS: 'http://localhost:5173',
   };
 
   it('JSON 키를 firebase-admin cert()가 받는 객체로 바꾼다', () => {
@@ -52,5 +53,35 @@ describe('validateEnv — FIREBASE_SERVICE_ACCOUNT', () => {
         }),
       }),
     ).toThrow('FIREBASE_SERVICE_ACCOUNT.private_key');
+  });
+});
+
+describe('validateEnv — TERMS_ENFORCEMENT', () => {
+  const env = {
+    ...base,
+    FIREBASE_SERVICE_ACCOUNT: JSON.stringify({
+      project_id: 'p',
+      client_email: 'e',
+      private_key: 'k',
+    }),
+  };
+
+  it('없으면 꺼진다(구버전 앱 보호)', () => {
+    expect(validateEnv(env).TERMS_ENFORCEMENT).toBe(false);
+  });
+
+  it.each([
+    ['true', true],
+    ['false', false],
+  ])('%p → %p', (value, expected) => {
+    expect(
+      validateEnv({ ...env, TERMS_ENFORCEMENT: value }).TERMS_ENFORCEMENT,
+    ).toBe(expected);
+  });
+
+  it('true/false 외의 값이면 부팅 때 실패한다', () => {
+    expect(() => validateEnv({ ...env, TERMS_ENFORCEMENT: '1' })).toThrow(
+      'TERMS_ENFORCEMENT',
+    );
   });
 });

@@ -11,6 +11,12 @@ export const SESSION_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 365;
 /** `@Public()`이 남기는 메타데이터 키. */
 export const IS_PUBLIC_KEY = 'isPublic';
 
+/** `@TermsExempt()`가 남기는 메타데이터 키. */
+export const IS_TERMS_EXEMPT_KEY = 'isTermsExempt';
+
+/** 약관에 동의하지 않은 사용자를 막을 때 내려주는 에러 코드(TERMS_ENFORCEMENT가 켜졌을 때만). */
+export const TERMS_REQUIRED_CODE = 'TERMS_REQUIRED';
+
 /** userId가 주입된 요청 객체 타입 — 가드가 채우고 데코레이터가 읽는다. */
 export interface RequestWithUserId extends Request {
   userId?: string;
