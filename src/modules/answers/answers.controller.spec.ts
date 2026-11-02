@@ -15,6 +15,8 @@ describe('AnswersController — 응답 계약', () => {
   let findMyAnswerToday: jest.Mock;
   let findMyAnswersInMonth: jest.Mock;
   let getOrAssignOtherAnswer: jest.Mock;
+  let hasCommented: jest.Mock;
+  let createComment: jest.Mock;
 
   /** 서비스가 돌려주는 Answer 엔티티(식별정보 포함 — 응답에 새어나가면 안 된다). */
   const saved = {
@@ -34,6 +36,15 @@ describe('AnswersController — 응답 계약', () => {
     bgValue: '#FFE8D6',
   };
 
+  /** 서비스가 돌려주는 Comment 엔티티(작성자 포함 — 응답에 새어나가면 안 된다). */
+  const comment = {
+    id: 1,
+    answerId: 20,
+    userId: 'user-2',
+    content: '저도 같은 생각이에요!',
+    createdAt: new Date('2026-06-19T03:00:00.000Z'),
+  };
+
   const payload = {
     id: 10,
     questionId: 1,
@@ -47,12 +58,16 @@ describe('AnswersController — 응답 계약', () => {
     findMyAnswerToday = jest.fn();
     findMyAnswersInMonth = jest.fn();
     getOrAssignOtherAnswer = jest.fn();
+    hasCommented = jest.fn().mockResolvedValue(false);
+    createComment = jest.fn();
 
     const service = {
       create,
       findMyAnswerToday,
       findMyAnswersInMonth,
       getOrAssignOtherAnswer,
+      hasCommented,
+      createComment,
     } as unknown as AnswersService;
 
     controller = new AnswersController(service);
@@ -80,7 +95,11 @@ describe('AnswersController — 응답 계약', () => {
   describe('GET /answers/me/history', () => {
     it('month를 연·월로 나눠 조회하고, 날짜는 KST 라벨·질문은 본문으로 바꿔 식별정보 없이 반환한다', async () => {
       findMyAnswersInMonth.mockResolvedValue([
-        { ...saved, question: { id: 1, body: '오늘의 질문' } },
+        {
+          ...saved,
+          question: { id: 1, body: '오늘의 질문' },
+          comments: [comment],
+        },
       ]);
 
       await expect(
@@ -93,6 +112,10 @@ describe('AnswersController — 응답 계약', () => {
             content: saved.content,
             bgType: 'color',
             bgValue: '#FFE8D6',
+            // 익명: 작성자 userId·id는 내보내지 않는다
+            comments: [
+              { content: comment.content, createdAt: comment.createdAt },
+            ],
           },
         ],
       });
@@ -119,9 +142,11 @@ describe('AnswersController — 응답 계약', () => {
           content: saved.content,
           bgType: 'color',
           bgValue: '#FFE8D6',
+          commented: false,
         },
       });
       expect(getOrAssignOtherAnswer).toHaveBeenCalledWith(1, 'user-1');
+      expect(hasCommented).toHaveBeenCalledWith(saved.id, 'user-1');
     });
 
     it('노출할 타인 답변이 0건이면 { answer: null }을 반환한다', async () => {
@@ -131,6 +156,22 @@ describe('AnswersController — 응답 계약', () => {
 
       expect(result).toEqual({ answer: null });
       expect(result).not.toBeNull();
+      expect(hasCommented).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /answers/others/comment', () => {
+    it('작성한 댓글을 래핑 없이, 작성자 식별정보 없이 반환한다', async () => {
+      createComment.mockResolvedValue(comment);
+      const commentDto = { questionId: 1, content: comment.content };
+
+      await expect(
+        controller.createComment('user-1', commentDto),
+      ).resolves.toEqual({
+        content: comment.content,
+        createdAt: comment.createdAt,
+      });
+      expect(createComment).toHaveBeenCalledWith('user-1', commentDto);
     });
   });
 

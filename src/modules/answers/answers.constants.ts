@@ -17,3 +17,6 @@ export const MAX_BG_VALUE_LENGTH = 200;
  * 세션 토큰 수명(마지막 이용 + 365일)과 맞춘 값. 계정으로 옮겨지지 않은 익명 답변도 같은 기준으로 지운다.
  */
 export const ANSWER_RETENTION_DAYS = 365;
+
+/** 댓글 본문 최대 길이 (디자인: 100자) */
+export const MAX_COMMENT_LENGTH = 100;

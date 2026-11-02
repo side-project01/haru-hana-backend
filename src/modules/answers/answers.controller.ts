@@ -7,6 +7,7 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiOkResponse,
@@ -17,7 +18,9 @@ import {
 import { UserId } from '../../common/auth/user-id.decorator';
 import { formatServiceDate } from '../../common/date/service-date.util';
 import { AnswersService } from './answers.service';
+import { CommentDto } from './dto/comment.dto';
 import { CreateAnswerDto } from './dto/create-answer.dto';
+import { CreateCommentDto } from './dto/create-comment.dto';
 import { FindMyAnswersQueryDto } from './dto/find-my-answers-query.dto';
 import { MyAnswerDto } from './dto/my-answer.dto';
 import { MyAnswerResponseDto } from './dto/my-answer-response.dto';
@@ -80,6 +83,7 @@ export class AnswersController {
         content: answer.content,
         bgType: answer.bgType as MyHistoryAnswerDto['bgType'],
         bgValue: answer.bgValue,
+        comments: answer.comments.map((comment) => this.toComment(comment)),
       })),
     };
   }
@@ -99,16 +103,39 @@ export class AnswersController {
       questionId,
       userId,
     );
-    // 프라이버시(8장): 식별정보 제외, 본문·배경만 매핑.
+    if (!answer) return { answer: null };
+    // 프라이버시(8장): 식별정보 제외, 본문·배경과 내 댓글 작성 여부만 매핑.
     return {
-      answer: answer
-        ? {
-            content: answer.content,
-            bgType: answer.bgType as OtherAnswerDto['bgType'],
-            bgValue: answer.bgValue,
-          }
-        : null,
+      answer: {
+        content: answer.content,
+        bgType: answer.bgType as OtherAnswerDto['bgType'],
+        bgValue: answer.bgValue,
+        commented: await this.answersService.hasCommented(answer.id, userId),
+      },
     };
+  }
+
+  @Post('others/comment')
+  @ApiOperation({
+    summary: '오늘 배정받은 타인 답변에 댓글 작성 (1인 1개·100자·금칙어 검사)',
+  })
+  @ApiCreatedResponse({ type: CommentDto })
+  @ApiBadRequestResponse({
+    description: '오늘의 질문이 아님·금칙어 포함·배정받은 답변 없음',
+  })
+  @ApiConflictResponse({ description: '이미 댓글을 남김' })
+  async createComment(
+    @UserId() userId: string,
+    @Body() dto: CreateCommentDto,
+  ): Promise<CommentDto> {
+    const comment = await this.answersService.createComment(userId, dto);
+    // 생성 결과는 항상 존재하므로 래핑 없이 payload를 그대로 반환한다.
+    return this.toComment(comment);
+  }
+
+  /** Comment 엔티티를 댓글 payload DTO로 매핑한다(익명: 작성자 userId 미노출). */
+  private toComment(comment: { content: string; createdAt: Date }): CommentDto {
+    return { content: comment.content, createdAt: comment.createdAt };
   }
 
   /** Answer 엔티티를 본인 답변 payload DTO로 매핑한다(userId·serviceDate 등 미노출). */

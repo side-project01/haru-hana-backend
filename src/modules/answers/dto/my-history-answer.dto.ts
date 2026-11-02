@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { BG_TYPES } from '../answers.constants';
+import { CommentDto } from './comment.dto';
 import type { BgType } from '../answers.constants';
 
 /**
@@ -34,4 +35,10 @@ export class MyHistoryAnswerDto {
 
   @ApiProperty({ description: '카드 배경 값', example: '#FFE8D6' })
   bgValue: string;
+
+  @ApiProperty({
+    type: [CommentDto],
+    description: '이 답변에 달린 댓글 (작성 오래된 순). 없으면 빈 배열',
+  })
+  comments: CommentDto[];
 }

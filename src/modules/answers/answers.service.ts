@@ -7,6 +7,7 @@ import {
 import {
   Prisma,
   type Answer,
+  type Comment,
   type Question,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -17,6 +18,7 @@ import {
   getServiceMonthRange,
 } from '../../common/date/service-date.util';
 import { CreateAnswerDto } from './dto/create-answer.dto';
+import { CreateCommentDto } from './dto/create-comment.dto';
 import { ANSWER_RETENTION_DAYS } from './answers.constants';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -107,7 +109,7 @@ export class AnswersService {
 
   /**
    * KST 달력 기준 한 달 동안의 본인 답변을 날짜 오름차순으로 조회한다(내 기록 화면).
-   * 카드에 그날의 질문을 보여줘야 하므로 질문을 함께 불러온다.
+   * 카드에 그날의 질문과 받은 댓글(작성 오래된 순)을 보여줘야 하므로 함께 불러온다.
    * @param userId 로그인 사용자 ID (P2)
    * @param year 연도
    * @param month 월 (1~12)
@@ -116,12 +118,15 @@ export class AnswersService {
     userId: string,
     year: number,
     month: number,
-  ): Promise<(Answer & { question: Question })[]> {
+  ): Promise<(Answer & { question: Question; comments: Comment[] })[]> {
     const { start, end } = getServiceMonthRange(year, month);
 
     return this.prisma.answer.findMany({
       where: { userId, serviceDate: { gte: start, lt: end } },
-      include: { question: true },
+      include: {
+        question: true,
+        comments: { orderBy: { createdAt: 'asc' } },
+      },
       orderBy: { serviceDate: 'asc' },
     });
   }
@@ -181,8 +186,67 @@ export class AnswersService {
   }
 
   /**
+   * 오늘 배정받은 타인 답변에 이미 댓글을 남겼는지. `getOrAssignOtherAnswer`가 돌려준 답변에 쓴다.
+   * @param answerId 배정받은 타인 답변 ID
+   * @param userId 본인 식별자
+   */
+  async hasCommented(answerId: number, userId: string): Promise<boolean> {
+    const comment = await this.prisma.comment.findUnique({
+      where: { answerId_userId: { answerId, userId } },
+      select: { id: true },
+    });
+    return comment !== null;
+  }
+
+  /**
+   * 오늘 배정받은 타인 답변(P5)에 댓글을 남긴다.
+   * 1) 오늘의 질문인지 검증 → 아니면 400. 2) 금칙어 검사 → 걸리면 400.
+   * 3) 그 질문의 내 배정을 찾는다 → 없으면(타인 답변을 아직 안 봤거나 볼 답변이 없었음) 400.
+   * 한 사람이 한 답변에 1개 제약(@@unique[answerId, userId])은 DB가 강제하며, 충돌 시 409로 변환한다.
+   * @param userId 로그인 사용자 ID (P2)
+   * @param now 기준 시각(기본값: 현재).
+   */
+  async createComment(
+    userId: string,
+    dto: CreateCommentDto,
+    now: Date = new Date(),
+  ): Promise<Comment> {
+    const todayQuestion = await this.questions.findTodayQuestion(now);
+    if (!todayQuestion || todayQuestion.id !== dto.questionId) {
+      throw new BadRequestException('오늘의 질문에만 댓글을 남길 수 있어요.');
+    }
+
+    if (this.profanity.contains(dto.content)) {
+      this.logger.warn('금칙어 포함 댓글 제출 차단');
+      throw new BadRequestException('부적절한 표현이 포함되어 있습니다.');
+    }
+
+    const pick = await this.prisma.otherAnswerPick.findUnique({
+      where: { userId_questionId: { userId, questionId: dto.questionId } },
+      select: { answerId: true },
+    });
+    if (!pick) {
+      throw new BadRequestException('댓글을 남길 답변이 없어요.');
+    }
+
+    try {
+      return await this.prisma.comment.create({
+        data: { answerId: pick.answerId, userId, content: dto.content },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('이미 댓글을 남겼어요.');
+      }
+      throw error;
+    }
+  }
+
+  /**
    * 보유 기간(ANSWER_RETENTION_DAYS)이 지난 데이터를 삭제한다.
-   * - 답변: 마지막 답변일이 기간을 넘긴 사용자의 답변 전부. 지워진 답변을 가리키던 배정은 FK CASCADE로 함께 지워진다.
+   * - 답변: 마지막 답변일이 기간을 넘긴 사용자의 답변 전부. 지워진 답변을 가리키던 배정·댓글은 FK CASCADE로 함께 지워진다.
    * - 배정: 당일에만 쓰이므로 주인과 무관하게 기간을 넘긴 것은 모두.
    * @returns 삭제한 답변·배정 건수
    */

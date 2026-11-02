@@ -171,7 +171,13 @@ flowchart LR
       "question": "오늘 하루 중…",
       "content": "…",
       "bgType": "color",
-      "bgValue": "#FFE8D6"
+      "bgValue": "#FFE8D6",
+      "comments": [
+        {
+          "content": "저도 같은 생각이에요!",
+          "createdAt": "2026-10-21T03:15:00.000Z"
+        }
+      ]
     }
   ]
 }
@@ -180,6 +186,7 @@ flowchart LR
 - 지난 질문은 앱이 알 방법이 없으므로 질문 본문을 함께 담는다. `serviceDate`는 KST 날짜 라벨(`formatServiceDate`)이다.
 - 달 범위는 `getServiceMonthRange`(serviceDate `start` 이상 `end` 미만)로 계산한다. 날짜 계산을 유틸 밖에 두지 않는다.
 - 그 달에 답변이 없으면 `{ "answers": [] }`. `month` 형식이 틀리면 400.
+- `comments`는 그 카드에 달린 댓글(작성 오래된 순, 없으면 `[]`)이다. 아래 "8. 댓글" 참고.
 
 ### 6. 오늘의 질문 알림 — FCM (`modules/push`)
 
@@ -200,6 +207,20 @@ flowchart LR
 - 동의 기록은 `User`에 있으므로 탈퇴(하드 삭제) 때 계정과 함께 지워진다. 무료 서비스라 거래기록 같은 법정 보존 대상이 없다고 보고 분리 보관하지 않는다.
 - **차단 스위치 `TERMS_ENFORCEMENT`**: `true`면 `AuthGuard`가 미동의 사용자의 요청을 `403 { code: "TERMS_REQUIRED" }`로 막는다(`@TermsExempt()` 라우트 제외). 기본은 `false` — 약관 화면이 없는 구버전 앱이 바로 멈추지 않도록, 새 앱이 충분히 퍼진 뒤 Vercel 환경변수를 바꾸고 재배포해 켠다.
 
+### 8. 댓글 (`modules/answers`)
+
+오늘 배정받은 타인 답변(P5)에 짧은 댓글을 남기고, 답변 주인은 내 기록 카드에서 받은 댓글을 본다.
+
+- `POST /answers/others/comment` `{ questionId, content }` → 201 `{ content, createdAt }`
+  - 앱은 타인 답변 id를 모르므로 질문 ID만 보내고, 서버가 그 질문의 내 배정(`OtherAnswerPick`)을 찾아 붙인다.
+  - 오늘의 질문이 아니거나, 배정받은 답변이 없거나(타인 답변을 아직 안 봤음), 금칙어(P6)면 400. 본문은 trim 후 1~100자.
+  - 한 사람이 한 답변에 1개 — `@@unique([answerId, userId])`, 중복은 409. 답변 한 장이 받는 댓글 수에는 상한이 없다.
+- `GET /answers/others`의 `answer.commented`: 내가 이미 댓글을 남겼는지. 앱을 다시 켜도 "완료" 상태를 복원하는 데 쓴다.
+- 받는 쪽은 `GET /answers/me/history`의 `comments`로 받는다. 작성자 식별자는 내보내지 않는다(익명).
+- "새 댓글" 읽음 여부는 서버에 두지 않는다. 앱이 `createdAt`을 기기에 저장해 비교한다.
+- 삭제: 답변이 지워지면(탈퇴·보유 기간 경과) 그 답변의 댓글은 FK CASCADE로 함께 지워진다. 탈퇴하면 내가 남에게 쓴 댓글도 지운다.
+- 푸시 알림은 보내지 않는다.
+
 ## 데이터 모델 (`prisma/schema.prisma`)
 
 | 모델              | 용도                      | 핵심 필드                                                                                                                             |
@@ -208,6 +229,7 @@ flowchart LR
 | `Question`        | 오늘의 질문 (P3)          | `body` · `displayDate`(@unique, serviceDate 매칭 키) · `active`                                                                       |
 | `Answer`          | 답변 (P1 · P4)            | `userId` · `questionId` · `content` · `bgType`/`bgValue` · `serviceDate`<br/>`@@unique([userId, serviceDate])`로 하루 1회를 DB가 강제 |
 | `OtherAnswerPick` | 타인 답변 배정 (P5)       | `userId` · `questionId` · `answerId`<br/>`@@unique([userId, questionId])`로 고정 노출을 DB가 강제                                     |
+| `Comment`         | 댓글                      | `answerId`(FK, CASCADE) · `userId`(작성자) · `content` · `createdAt`<br/>`@@unique([answerId, userId])`로 1인 1개를 DB가 강제         |
 | `PushToken`       | 알림용 FCM 기기 토큰      | `token`(@id) · `userId` · `updatedAt`(앱 실행마다 갱신, 오래되면 정리)                                                                |
 
 > `userId`는 `User.id`를 **외래키가 아닌 문자열로** 참조한다. 아직 계정으로 옮겨지지 않은 익명 시절 데이터가 anonId 값으로 남아 있을 수 있기 때문이다(보유 기간이 지나면 cron이 지운다).

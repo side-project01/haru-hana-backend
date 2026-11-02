@@ -18,6 +18,7 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
   let pickDeleteMany: jest.Mock;
   let userDeleteMany: jest.Mock;
   let pushTokenDeleteMany: jest.Mock;
+  let commentDeleteMany: jest.Mock;
   let transaction: jest.Mock;
 
   const existingUser = { id: 'user-1', googleSub: 'sub-1' };
@@ -36,6 +37,7 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
     pickDeleteMany = jest.fn().mockResolvedValue({ count: 1 });
     userDeleteMany = jest.fn().mockResolvedValue({ count: 1 });
     pushTokenDeleteMany = jest.fn().mockResolvedValue({ count: 2 });
+    commentDeleteMany = jest.fn().mockResolvedValue({ count: 4 });
 
     const tx = {
       user: { create: userCreate },
@@ -58,6 +60,7 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
       answer: { findFirst: answerFindFirst, deleteMany: answerDeleteMany },
       otherAnswerPick: { findFirst: pickFindFirst, deleteMany: pickDeleteMany },
       pushToken: { deleteMany: pushTokenDeleteMany },
+      comment: { deleteMany: commentDeleteMany },
       $transaction: transaction,
     } as unknown as PrismaService;
 
@@ -177,13 +180,16 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
   });
 
   describe('탈퇴', () => {
-    it('답변·배정·알림 토큰·계정을 한 트랜잭션에서 모두 지운다', async () => {
+    it('답변·배정·내가 쓴 댓글·알림 토큰·계정을 한 트랜잭션에서 모두 지운다', async () => {
       await service.deleteAccount('user-1');
 
       expect(answerDeleteMany).toHaveBeenCalledWith({
         where: { userId: 'user-1' },
       });
       expect(pickDeleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
+      expect(commentDeleteMany).toHaveBeenCalledWith({
         where: { userId: 'user-1' },
       });
       expect(pushTokenDeleteMany).toHaveBeenCalledWith({
@@ -194,6 +200,7 @@ describe('AuthService (P2 — 로그인·익명 데이터 이전)', () => {
         [
           answerDeleteMany,
           pickDeleteMany,
+          commentDeleteMany,
           pushTokenDeleteMany,
           userDeleteMany,
         ].map((deleteMany) => deleteMany.mock.results[0].value as unknown),

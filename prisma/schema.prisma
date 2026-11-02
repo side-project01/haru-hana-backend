@@ -63,6 +63,7 @@ model Answer {
   createdAt   DateTime @default(now())
 
   otherPicks OtherAnswerPick[] // 이 답변을 타인 답변으로 배정받은 사용자들 (P5)
+  comments   Comment[] // 이 답변을 배정받은 사용자들이 남긴 댓글
 
   @@unique([userId, serviceDate]) // P1: 하루 1회 DB 레벨 강제
   @@index([questionId]) // P5: 타인 답변 조회
@@ -81,6 +82,20 @@ model OtherAnswerPick {
 
   @@unique([userId, questionId]) // 사용자·질문당 배정 1건을 DB 레벨에서 강제 (P1의 하루1회와 같은 방식)
   @@index([answerId])
+}
+
+// 댓글. 오늘 배정받은 타인 답변(OtherAnswerPick)에만, 한 사람이 한 답변에 1개 남긴다.
+// 받는 사람에게 작성자를 드러내지 않는다(익명). 답변이 지워지면 FK CASCADE로 함께 지워진다.
+model Comment {
+  id        Int      @id @default(autoincrement())
+  answerId  Int
+  answer    Answer   @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  userId    String // 작성자. Answer.userId처럼 FK 없는 문자열
+  content   String // 댓글 본문 (P6 금칙어 검사 후 저장)
+  createdAt DateTime @default(now())
+
+  @@unique([answerId, userId]) // 한 사람이 한 답변에 1개를 DB 레벨에서 강제
+  @@index([userId]) // 탈퇴 시 내가 쓴 댓글 삭제
 }
 
 // FCM 기기 토큰 (오늘의 질문 알림). 기기 1대 = 토큰 1개, 사용자 1명은 여러 기기를 가질 수 있다.

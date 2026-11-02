@@ -14,10 +14,7 @@ import {
   MAX_BG_VALUE_LENGTH,
 } from '../answers.constants';
 import type { BgType } from '../answers.constants';
-
-/** 문자열 앞뒤 공백을 제거한다(검증 전 정규화). 문자열이 아니면 원값 유지. */
-const trim = ({ value }: { value: unknown }): unknown =>
-  typeof value === 'string' ? value.trim() : value;
+import { trim } from './trim.transform';
 
 /**
  * 답변 제출 요청 DTO (`POST /answers`).

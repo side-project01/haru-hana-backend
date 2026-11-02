@@ -6,6 +6,7 @@ import { ProfanityService } from '../../common/moderation/profanity.service';
 import { QuestionsService } from '../questions/questions.service';
 import { getServiceDate } from '../../common/date/service-date.util';
 import { CreateAnswerDto } from './dto/create-answer.dto';
+import { CreateCommentDto } from './dto/create-comment.dto';
 
 describe('AnswersService (P1·P3·P5·P6)', () => {
   let service: AnswersService;
@@ -21,6 +22,8 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
   let groupBy: jest.Mock;
   let deleteMany: jest.Mock;
   let pickDeleteMany: jest.Mock;
+  let commentCreate: jest.Mock;
+  let commentFindUnique: jest.Mock;
 
   const dto: CreateAnswerDto = {
     questionId: 1,
@@ -43,6 +46,8 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
     groupBy = jest.fn();
     deleteMany = jest.fn();
     pickDeleteMany = jest.fn();
+    commentCreate = jest.fn();
+    commentFindUnique = jest.fn();
 
     const prisma = {
       answer: {
@@ -59,6 +64,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
         create: pickCreate,
         deleteMany: pickDeleteMany,
       },
+      comment: { create: commentCreate, findUnique: commentFindUnique },
     } as unknown as PrismaService;
     const profanity = { contains } as unknown as ProfanityService;
     const questions = { findTodayQuestion } as unknown as QuestionsService;
@@ -136,7 +142,7 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
   });
 
   describe('findMyAnswersInMonth — 내 기록 월별 조회', () => {
-    it('KST 달력 한 달 범위의 본인 답변을 질문과 함께 날짜 오름차순으로 조회한다', async () => {
+    it('KST 달력 한 달 범위의 본인 답변을 질문·댓글과 함께 날짜 오름차순으로 조회한다', async () => {
       const mine = [{ id: 10, userId: 'user-1', question: { body: '질문' } }];
       findMany.mockResolvedValue(mine);
 
@@ -151,7 +157,10 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
             lt: new Date('2026-10-31T15:00:00.000Z'), // KST 2026-11-01 00:00
           },
         },
-        include: { question: true },
+        include: {
+          question: true,
+          comments: { orderBy: { createdAt: 'asc' } },
+        },
         orderBy: { serviceDate: 'asc' },
       });
     });
@@ -293,6 +302,89 @@ describe('AnswersService (P1·P3·P5·P6)', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(pickFindUnique).not.toHaveBeenCalled();
       expect(count).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('hasCommented — 내 댓글 작성 여부', () => {
+    it('답변·작성자 유니크 키로 찾아 있으면 true', async () => {
+      commentFindUnique.mockResolvedValue({ id: 1 });
+
+      await expect(service.hasCommented(20, 'user-1')).resolves.toBe(true);
+      expect(commentFindUnique).toHaveBeenCalledWith({
+        where: { answerId_userId: { answerId: 20, userId: 'user-1' } },
+        select: { id: true },
+      });
+    });
+
+    it('없으면 false', async () => {
+      commentFindUnique.mockResolvedValue(null);
+
+      await expect(service.hasCommented(20, 'user-1')).resolves.toBe(false);
+    });
+  });
+
+  describe('createComment — 배정받은 타인 답변에 댓글', () => {
+    const commentDto: CreateCommentDto = {
+      questionId: 1,
+      content: '저도 같은 생각이에요!',
+    };
+
+    it('오늘 질문의 내 배정 답변에 댓글을 저장한다', async () => {
+      pickFindUnique.mockResolvedValue({ answerId: 20 });
+      const saved = { id: 1, answerId: 20, userId: 'user-1' };
+      commentCreate.mockResolvedValue(saved);
+
+      await expect(service.createComment('user-1', commentDto)).resolves.toBe(
+        saved,
+      );
+      expect(pickFindUnique).toHaveBeenCalledWith({
+        where: { userId_questionId: { userId: 'user-1', questionId: 1 } },
+        select: { answerId: true },
+      });
+      expect(commentCreate).toHaveBeenCalledWith({
+        data: { answerId: 20, userId: 'user-1', content: commentDto.content },
+      });
+    });
+
+    it('오늘의 질문이 아니면 BadRequest(400) — 지난 답변에는 못 남긴다', async () => {
+      findTodayQuestion.mockResolvedValue({ id: 2 });
+
+      await expect(
+        service.createComment('user-1', commentDto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(commentCreate).not.toHaveBeenCalled();
+    });
+
+    it('금칙어가 포함되면 BadRequest(400)로 차단한다 (P6)', async () => {
+      contains.mockReturnValue(true);
+
+      await expect(
+        service.createComment('user-1', commentDto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(commentCreate).not.toHaveBeenCalled();
+    });
+
+    it('배정받은 답변이 없으면 BadRequest(400)', async () => {
+      pickFindUnique.mockResolvedValue(null);
+
+      await expect(
+        service.createComment('user-1', commentDto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(commentCreate).not.toHaveBeenCalled();
+    });
+
+    it('unique 충돌(P2002)은 Conflict(409)로 변환한다 — 1인 1개', async () => {
+      pickFindUnique.mockResolvedValue({ answerId: 20 });
+      commentCreate.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+
+      await expect(
+        service.createComment('user-1', commentDto),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
   });
 

@@ -70,22 +70,23 @@ export class AuthService {
   }
 
   /**
-   * 계정을 탈퇴한다(하드 삭제). 답변·배정·알림 토큰·계정을 한 트랜잭션으로 지운다.
+   * 계정을 탈퇴한다(하드 삭제). 답변·배정·내가 쓴 댓글·알림 토큰·계정을 한 트랜잭션으로 지운다.
    * 계정이 사라지면 AuthGuard가 남은 세션 토큰을 모두 401로 막으므로 따로 무효화하지 않는다.
-   * - 내 답변을 가리키던 타인의 배정은 FK CASCADE로 함께 지워진다(P5 고정이 풀려 재추첨될 수 있다).
+   * - 내 답변을 가리키던 타인의 배정과 내 답변에 달린 댓글은 FK CASCADE로 함께 지워진다(P5 고정이 풀려 재추첨될 수 있다).
    * - 계정은 deleteMany로 지운다. 동시 탈퇴 요청이 둘 다 가드를 통과해도 두 번째가 500 없이 끝난다.
    * @param userId 로그인 사용자 ID
    */
   async deleteAccount(userId: string): Promise<void> {
-    const [answers, picks] = await this.prisma.$transaction([
+    const [answers, picks, comments] = await this.prisma.$transaction([
       this.prisma.answer.deleteMany({ where: { userId } }),
       this.prisma.otherAnswerPick.deleteMany({ where: { userId } }),
+      this.prisma.comment.deleteMany({ where: { userId } }),
       this.prisma.pushToken.deleteMany({ where: { userId } }),
       this.prisma.user.deleteMany({ where: { id: userId } }),
     ]);
 
     this.logger.log(
-      `계정 탈퇴: 답변 ${answers.count}건, 배정 ${picks.count}건 삭제`,
+      `계정 탈퇴: 답변 ${answers.count}건, 배정 ${picks.count}건, 댓글 ${comments.count}건 삭제`,
     );
   }
 
